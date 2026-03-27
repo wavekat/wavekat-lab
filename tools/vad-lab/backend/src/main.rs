@@ -48,7 +48,17 @@ async fn main() {
     tracing::info!("vad-lab server listening on http://{addr}");
     tracing::info!("open http://{addr} in your browser");
 
-    let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();
+    let listener = tokio::net::TcpListener::bind(&addr).await.unwrap_or_else(|e| {
+        if e.kind() == std::io::ErrorKind::AddrInUse {
+            tracing::error!(
+                "port {} is already in use — kill the existing process with: lsof -ti:{} | xargs kill",
+                args.port, args.port
+            );
+        } else {
+            tracing::error!("failed to bind to {addr}: {e}");
+        }
+        std::process::exit(1);
+    });
     axum::serve(listener, app).await.unwrap();
 }
 
