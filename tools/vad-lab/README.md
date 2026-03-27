@@ -19,6 +19,7 @@ A web-based experimentation tool for testing and comparing Voice Activity Detect
 | **webrtc-vad** | Google's WebRTC VAD — fast, low latency | Mode: quality, low-bitrate, aggressive, very-aggressive |
 | **silero-vad** | Neural network VAD via ONNX Runtime — higher accuracy | Threshold: 0.0 - 1.0 |
 | **ten-vad** | TEN framework VAD | Threshold: 0.0 - 1.0 |
+| **firered-vad** | Xiaohongshu's FireRedVAD using DFSMN architecture | Threshold: 0.0 - 1.0 |
 
 Each config can also enable per-config preprocessing:
 
