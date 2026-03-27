@@ -1,0 +1,20 @@
+{
+  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
+  "packages": {
+    ".": {
+      "release-type": "simple",
+      "bump-minor-pre-major": true,
+      "extra-files": [
+        {
+          "type": "generic",
+          "path": "tools/vad-lab/backend/Cargo.toml"
+        },
+        {
+          "type": "json",
+          "path": "tools/vad-lab/frontend/package.json",
+          "jsonpath": "$.version"
+        }
+      ]
+    }
+  }
+}
