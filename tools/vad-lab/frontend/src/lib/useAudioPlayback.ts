@@ -88,26 +88,36 @@ export function useAudioPlayback({
     durationMsRef.current = durationMs;
   }, [durationMs]);
 
-  // Animation loop for position updates (uses refs to avoid recreating callback)
+  // Animation loop for position updates.
+  // Use a stable callback ref so the rAF self-call doesn't reference
+  // a variable before its declaration, and refs are only written in an effect.
+  const updatePositionRef = useRef<() => void>(() => {});
+
+  useEffect(() => {
+    updatePositionRef.current = () => {
+      if (!audioContextRef.current) return;
+
+      const elapsed = audioContextRef.current.currentTime - startTimeRef.current;
+      const positionMs = startOffsetRef.current + elapsed * 1000;
+      const duration = durationMsRef.current;
+
+      if (positionMs >= duration) {
+        // Playback finished - reset to beginning
+        startOffsetRef.current = 0;
+        setState({ isPlaying: false, positionMs: 0 });
+        onPositionChangeRef.current?.(0);
+        sourceNodeRef.current = null;
+        return;
+      }
+
+      setState((prev) => ({ ...prev, positionMs }));
+      onPositionChangeRef.current?.(positionMs);
+      rafIdRef.current = requestAnimationFrame(() => updatePositionRef.current());
+    };
+  });
+
   const updatePosition = useCallback(() => {
-    if (!audioContextRef.current) return;
-
-    const elapsed = audioContextRef.current.currentTime - startTimeRef.current;
-    const positionMs = startOffsetRef.current + elapsed * 1000;
-    const duration = durationMsRef.current;
-
-    if (positionMs >= duration) {
-      // Playback finished - reset to beginning
-      startOffsetRef.current = 0;
-      setState({ isPlaying: false, positionMs: 0 });
-      onPositionChangeRef.current?.(0);
-      sourceNodeRef.current = null;
-      return;
-    }
-
-    setState((prev) => ({ ...prev, positionMs }));
-    onPositionChangeRef.current?.(positionMs);
-    rafIdRef.current = requestAnimationFrame(updatePosition);
+    updatePositionRef.current();
   }, []);
 
   const play = useCallback(() => {
@@ -260,10 +270,34 @@ export function useAudioPlayback({
     };
   }, []);
 
-  // Reset position when samples change (new recording)
+  // Reset playback when samples change (new recording).
+  // Perform side-effect cleanup in the effect; schedule the state reset via
+  // queueMicrotask to avoid calling setState synchronously in the effect body.
+  const prevSamplesLenRef = useRef(samples.length);
   useEffect(() => {
-    stop();
-  }, [samples.length, stop]);
+    if (prevSamplesLenRef.current !== samples.length) {
+      prevSamplesLenRef.current = samples.length;
+
+      // Stop audio source
+      if (sourceNodeRef.current) {
+        sourceNodeRef.current.stop();
+        sourceNodeRef.current.disconnect();
+        sourceNodeRef.current = null;
+      }
+
+      // Cancel animation frame
+      if (rafIdRef.current) {
+        cancelAnimationFrame(rafIdRef.current);
+        rafIdRef.current = null;
+      }
+
+      startOffsetRef.current = 0;
+      queueMicrotask(() => {
+        setState({ isPlaying: false, positionMs: 0 });
+        onPositionChange?.(0);
+      });
+    }
+  }, [samples.length, onPositionChange]);
 
   return {
     state,

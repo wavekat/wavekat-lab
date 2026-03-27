@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -31,10 +31,8 @@ export function ConfigPanel({
   showPreprocessed,
   onShowPreprocessedChange,
 }: ConfigPanelProps) {
-  const [nextId, setNextId] = useState(1);
-
-  // Sync nextId when configs are loaded externally (localStorage / defaults)
-  useEffect(() => {
+  // Derive nextId from existing configs so we never call setState in an effect.
+  const nextId = useMemo(() => {
     let max = 0;
     for (const c of configs) {
       const match = c.id.match(/^config-(\d+)$/);
@@ -42,7 +40,7 @@ export function ConfigPanel({
         max = Math.max(max, parseInt(match[1], 10));
       }
     }
-    setNextId((prev) => Math.max(prev, max + 1));
+    return max + 1;
   }, [configs]);
 
   const addConfig = () => {
@@ -56,7 +54,6 @@ export function ConfigPanel({
     }
 
     const id = `config-${nextId}`;
-    setNextId((n) => n + 1);
 
     onConfigsChange([
       ...configs,
@@ -76,7 +73,6 @@ export function ConfigPanel({
 
   const cloneConfig = (config: VadConfig) => {
     const id = `config-${nextId}`;
-    setNextId((n) => n + 1);
 
     onConfigsChange([
       ...configs,

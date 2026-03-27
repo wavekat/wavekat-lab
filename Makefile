@@ -1,4 +1,4 @@
-.PHONY: help setup setup-backend setup-frontend dev dev-frontend dev-backend check test fmt lint ci
+.PHONY: help setup setup-backend setup-frontend dev dev-frontend dev-backend check test fmt lint ci ci-backend ci-frontend
 
 help:
 	@echo "Available targets:"
@@ -12,7 +12,9 @@ help:
 	@echo "  test            Run all tests"
 	@echo "  fmt             Format code"
 	@echo "  lint            Run clippy with warnings as errors"
-	@echo "  ci              Run all CI checks locally (fmt, clippy, test)"
+	@echo "  ci              Run all CI checks (backend + frontend)"
+	@echo "  ci-backend      Run backend CI checks (fmt, clippy, test)"
+	@echo "  ci-frontend     Run frontend CI checks (lint, build)"
 
 # Install all dependencies
 setup: setup-backend setup-frontend
@@ -53,8 +55,15 @@ fmt:
 lint:
 	cargo clippy --workspace -- -D warnings
 
-# Run all CI checks locally
-ci:
+# Run all CI checks (backend + frontend)
+ci: ci-backend ci-frontend
+
+# Run backend CI checks (fmt, clippy, test)
+ci-backend:
 	cargo fmt --all -- --check
 	cargo clippy --workspace -- -D warnings
 	cargo test --workspace
+
+# Run frontend CI checks (lint, build) — run setup-frontend first if deps are missing
+ci-frontend:
+	cd tools/vad-lab/frontend && npm run lint && npm run build
