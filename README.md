@@ -1,5 +1,7 @@
 <p align="center">
-  <img src="https://github.com/wavekat/wavekat-brand/raw/main/assets/banners/wavekat-lab-narrow.svg" alt="WaveKat Lab">
+  <a href="https://github.com/wavekat/wavekat-lab">
+    <img src="https://github.com/wavekat/wavekat-brand/raw/main/assets/banners/wavekat-lab-narrow.svg" alt="WaveKat Lab">
+  </a>
 </p>
 
 Developer experimentation tools for the [WaveKat](https://github.com/wavekat) libraries.
