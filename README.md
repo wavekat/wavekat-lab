@@ -16,11 +16,10 @@ Developer experimentation tools for the [WaveKat](https://github.com/wavekat) li
 ## Quick Start
 
 ```bash
-# Terminal 1: frontend dev server (http://localhost:5173)
-cd tools/vad-lab/frontend && npm install && npm run dev
+make setup         # one-time: install dependencies
 
-# Terminal 2: backend (http://localhost:3000)
-cargo run -p vad-lab
+make dev-frontend  # Terminal 1: frontend (http://localhost:5173)
+make dev-backend   # Terminal 2: backend with auto-rebuild (http://localhost:3000)
 ```
 
 See [tools/vad-lab/README.md](tools/vad-lab/README.md) for full usage and options.

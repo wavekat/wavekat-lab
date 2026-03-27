@@ -98,7 +98,7 @@ make dev-backend
 ## Usage
 
 1. Open the UI in your browser (default: `http://localhost:3000`)
-2. Configure one or more VAD backends in the config panel — defaults are provided for all three backends
+2. Configure one or more VAD backends in the config panel — defaults are provided for all four backends
 3. Either click **Record** to capture from your mic, or **Upload** a WAV file
 4. Watch the waveform, spectrogram, and per-config VAD probability timelines update in real time
 5. Use zoom/pan to inspect specific regions; hover to see exact probability values
