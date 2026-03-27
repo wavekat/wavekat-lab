@@ -1,6 +1,11 @@
-# wavekat-lab
+<p align="center">
+  <img src="https://github.com/wavekat/wavekat-brand/raw/main/assets/banners/wavekat-lab-narrow.svg" alt="WaveKat Lab">
+</p>
 
 Developer experimentation tools for the [WaveKat](https://github.com/wavekat) libraries.
+
+> [!WARNING]
+> Early development. Tools may change.
 
 ## Tools
 
@@ -26,4 +31,6 @@ wavekat-lab is a collection of developer tools for understanding and experimenti
 
 ## License
 
-Apache-2.0
+Licensed under [Apache 2.0](LICENSE).
+
+Copyright 2026 WaveKat.
