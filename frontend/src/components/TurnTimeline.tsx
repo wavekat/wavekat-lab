@@ -123,9 +123,9 @@ export function TurnTimeline({
         if (result.timestamp_ms < effectiveViewport.viewStartMs - 1000) continue;
         if (result.timestamp_ms > viewEndMs + 1000) continue;
 
-        // Segment spans from previous prediction to this one.
-        // Skip the first result to avoid backfilling before detection started.
-        const segStartMs = i === 0 ? result.timestamp_ms : results[i - 1].timestamp_ms;
+        // Segment spans from the previous prediction (or t=0) to this one.
+        // The first prediction covers audio from t=0 to its timestamp.
+        const segStartMs = i === 0 ? 0 : results[i - 1].timestamp_ms;
         const segEndMs = result.timestamp_ms;
         if (segStartMs >= segEndMs) continue;
 
@@ -166,11 +166,11 @@ export function TurnTimeline({
     }
   }, [results, totalDurationMs, effectiveViewport, width, height, hoverTimeMs, playheadMs]);
 
-  // Find hovered prediction for tooltip
+  // Find hovered prediction for tooltip.
+  // Each bar segment [results[i-1].timestamp_ms, results[i].timestamp_ms) displays
+  // results[i]'s data, so we want the first result whose timestamp is after hoverTimeMs.
   const hoveredIndex =
-    hoverTimeMs != null
-      ? results.reduce((best, r, i) => (r.timestamp_ms <= hoverTimeMs ? i : best), -1)
-      : -1;
+    hoverTimeMs != null ? results.findIndex((r) => r.timestamp_ms > hoverTimeMs) : -1;
   const hoveredResult = hoveredIndex >= 0 ? results[hoveredIndex] : null;
 
   // Compute average RTF from all results
