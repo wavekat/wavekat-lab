@@ -9,9 +9,11 @@
 
 - **Rename done.** `tools/vad-lab/` → `tools/lab/`, Cargo package `vad-lab` → `lab`. All
   references updated. Build verified clean.
+- **Path flattened.** `tools/lab/backend/` and `tools/lab/frontend/` moved to repo root:
+  `backend/` and `frontend/`. Cargo workspace root is now the repo root.
 - **Single unified tool** (Option B). One Axum + React app with VAD and Turn sections. Shared
   audio capture, waveform display, and WebSocket infrastructure.
-- **Sequencing.** Rename first (done), verify VAD still works, then add turn detection.
+- **Sequencing.** Rename first (done), path flatten (done), verify VAD still works, then add turn detection.
 
 ---
 
@@ -25,7 +27,7 @@ testing tool for all wavekat-* library backends.
 
 ## What exists today
 
-### lab (tools/lab) — formerly vad-lab
+### lab — formerly vad-lab (formerly tools/vad-lab)
 
 **Backend (Rust/Axum):**
 - Accepts audio from microphone (cpal) or WAV file upload
@@ -61,26 +63,25 @@ In production the flow is: **Audio → VAD → (speech segment) → TurnDetector
 
 ```
 wavekat-lab/
-├── tools/
-│   └── lab/
-│       ├── backend/
-│       │   ├── Cargo.toml
-│       │   └── src/
-│       │       ├── main.rs
-│       │       ├── vad/          # existing VAD fan-out logic
-│       │       │   ├── mod.rs
-│       │       │   └── pipeline.rs
-│       │       └── turn/         # new
-│       │           ├── mod.rs
-│       │           ├── audio.rs   # AudioTurnDetector runner
-│       │           └── text.rs    # TextTurnDetector runner
-│       └── frontend/
-│           └── src/
-│               ├── App.tsx
-│               ├── vad/           # existing VAD components
-│               └── turn/          # new
-│                   ├── AudioTurnPanel.tsx
-│                   └── TextTurnPanel.tsx
+├── Cargo.toml          # workspace root (members: ["backend"])
+├── backend/
+│   ├── Cargo.toml
+│   └── src/
+│       ├── main.rs
+│       ├── vad/          # existing VAD fan-out logic
+│       │   ├── mod.rs
+│       │   └── pipeline.rs
+│       └── turn/         # new
+│           ├── mod.rs
+│           ├── audio.rs   # AudioTurnDetector runner
+│           └── text.rs    # TextTurnDetector runner
+└── frontend/
+    └── src/
+        ├── App.tsx
+        ├── vad/           # existing VAD components
+        └── turn/          # new
+            ├── AudioTurnPanel.tsx
+            └── TextTurnPanel.tsx
 ```
 
 ---
@@ -219,14 +220,18 @@ wavekat-turn = { version = "0.0", features = ["pipecat", "livekit"] }
 
 ## Implementation phases
 
-**Phase 0 — Rename (done)**
+**Phase 0 — Rename + flatten (done)**
 - `tools/vad-lab/` → `tools/lab/`, Cargo package `vad-lab` → `lab`
-- All references updated: Cargo.toml, Makefile, release-please-config.json, README.md
+- `tools/lab/backend/` + `tools/lab/frontend/` → `backend/` + `frontend/` at repo root
+- All references updated: Cargo.toml, Makefile, release-please-config.json, README.md, CI
 - Build verified clean
 
 **Phase 1 — Verify VAD still works end-to-end**
 - Run `make dev-backend` + `make dev-frontend`, confirm VAD UI works as before
-- Fix any issues from the rename before adding new features
+- Fix any issues from the rename/flatten before adding new features
+- Note: `backend/src/` is currently flat (`pipeline.rs`, `ws.rs`, `session.rs`, etc.).
+  The `vad/` and `turn/` subdirectories in the proposed structure above will be created
+  as part of Phase 2/3 restructuring.
 
 **Phase 2 — Model download infrastructure**
 - Add `models.toml` manifest to backend
