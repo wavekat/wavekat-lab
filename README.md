@@ -13,7 +13,7 @@ Developer experimentation tools for the [WaveKat](https://github.com/wavekat) li
 
 | Tool | Description |
 |------|-------------|
-| [vad-lab](tools/vad-lab/) | Web-based tool for testing and comparing VAD backends side by side |
+| [lab](tools/lab/) | Web-based tool for testing and comparing VAD and turn detection backends side by side |
 
 ## Quick Start
 
@@ -24,7 +24,7 @@ make dev-frontend  # Terminal 1: frontend (http://localhost:5173)
 make dev-backend   # Terminal 2: backend with auto-rebuild (http://localhost:3000)
 ```
 
-See [tools/vad-lab/README.md](tools/vad-lab/README.md) for full usage and options.
+See [tools/lab/README.md](tools/lab/README.md) for full usage and options.
 
 ## Overview
 

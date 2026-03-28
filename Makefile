@@ -5,8 +5,8 @@ help:
 	@echo "  setup           Install all dependencies (run once after clone)"
 	@echo "  setup-backend   Install cargo-watch"
 	@echo "  setup-frontend  Install npm dependencies"
-	@echo "  dev-backend     Run vad-lab backend with auto-rebuild"
-	@echo "  dev-frontend    Run vad-lab frontend dev server"
+	@echo "  dev-backend     Run lab backend with auto-rebuild"
+	@echo "  dev-frontend    Run lab frontend dev server"
 	@echo "  dev             Instructions for running both"
 	@echo "  check           Check workspace compiles"
 	@echo "  test            Run all tests"
@@ -25,15 +25,15 @@ setup-backend:
 
 # Install frontend npm dependencies
 setup-frontend:
-	cd tools/vad-lab/frontend && . "$$NVM_DIR/nvm.sh" && nvm use && npm install
+	cd tools/lab/frontend && . "$$NVM_DIR/nvm.sh" && nvm use && npm install
 
-# Run vad-lab backend with auto-rebuild on file changes
+# Run lab backend with auto-rebuild on file changes
 dev-backend:
-	cargo watch -x 'run -p vad-lab'
+	cargo watch -x 'run -p lab'
 
-# Run vad-lab frontend dev server (uses .nvmrc for Node version)
+# Run lab frontend dev server (uses .nvmrc for Node version)
 dev-frontend:
-	cd tools/vad-lab/frontend && . "$$NVM_DIR/nvm.sh" && nvm use && npm run dev
+	cd tools/lab/frontend && . "$$NVM_DIR/nvm.sh" && nvm use && npm run dev
 
 # Run both frontend and backend (requires two terminals — use dev-backend + dev-frontend)
 dev:
@@ -66,4 +66,4 @@ ci-backend:
 
 # Run frontend CI checks (lint, build) — run setup-frontend first if deps are missing
 ci-frontend:
-	cd tools/vad-lab/frontend && npm run lint && npm run build
+	cd tools/lab/frontend && npm run lint && npm run build

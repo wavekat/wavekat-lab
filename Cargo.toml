@@ -1,5 +1,5 @@
 [workspace]
-members = ["tools/vad-lab/backend"]
+members = ["tools/lab/backend"]
 resolver = "2"
 
 [workspace.dependencies]
