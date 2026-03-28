@@ -14,6 +14,8 @@ import { FrequencySpectrum } from "@/components/FrequencySpectrum";
 import { ConfigPanel } from "@/components/ConfigPanel";
 import { LogPanel } from "@/components/LogPanel";
 import { ZoomControls } from "@/components/ZoomControls";
+import { TurnTimeline, type TurnResultPoint } from "@/components/TurnTimeline";
+import { TurnConfigPanel, DEFAULT_TURN_CONFIG, type TurnConfig } from "@/components/TurnConfigPanel";
 import {
   type Viewport,
   createDefaultViewport,
@@ -166,6 +168,8 @@ function App() {
   const [hoverTimeMs, setHoverTimeMs] = useState<number | null>(null);
   const [viewport, setViewport] = useState<Viewport>(createDefaultViewport);
   const [spectrumBins, setSpectrumBins] = useState(256);
+  const [turnConfig, setTurnConfig] = useState<TurnConfig>(DEFAULT_TURN_CONFIG);
+  const [turnResults, setTurnResults] = useState<TurnResultPoint[]>([]);
 
   // Preprocessed data per config
   const [preprocessedSamples, setPreprocessedSamples] = useState<Record<string, number[]>>({});
@@ -346,6 +350,18 @@ function App() {
         }));
         break;
 
+      case "turn":
+        setTurnResults((prev) => [
+          ...prev,
+          {
+            timestamp_ms: msg.timestamp_ms,
+            state: msg.state,
+            confidence: msg.confidence,
+            latency_ms: msg.latency_ms,
+          },
+        ]);
+        break;
+
       case "done":
         recordingRef.current = false;
         setRecording(false);
@@ -398,6 +414,7 @@ function App() {
     setVadTiming({});
     setPreprocessedSamples({});
     setPreprocessedSpectrumData({});
+    setTurnResults([]);
     setPlaybackSource("original");
     setTotalDurationMs(0);
     setSampleRate(null);
@@ -412,6 +429,7 @@ function App() {
     });
 
     socket.send({ type: "set_configs", configs });
+    socket.send({ type: "set_turn_config", predict_every_frames: turnConfig.enabled ? Math.round(turnConfig.intervalMs / 10) : 0 });
     socket.send({
       type: "start_recording",
       device_index: parseInt(selectedDevice),
@@ -442,12 +460,14 @@ function App() {
     setVadTiming({});
     setPreprocessedSamples({});
     setPreprocessedSpectrumData({});
+    setTurnResults([]);
     setPlaybackSource("original");
     setTotalDurationMs(0);
     setSampleRate(null);
     setViewport({ viewStartMs: 0, viewDurationMs: calculateViewDuration(containerWidth) });
 
     socket.send({ type: "set_configs", configs });
+    socket.send({ type: "set_turn_config", predict_every_frames: turnConfig.enabled ? Math.round(turnConfig.intervalMs / 10) : 0 });
     socket.send({ type: "load_file", path, channel });
     setLoadingFile(true);
   };
@@ -611,13 +631,14 @@ function App() {
             )}
           </div>
 
-          {/* Hint when no configs exist */}
+            {/* Hint when no configs exist */}
           {configs.length === 0 && connected && (
             <span className="text-xs text-muted-foreground">
               Add a VAD config below to enable recording and file upload.
             </span>
           )}
         </div>
+
 
         {/* Playback controls (visible when audio exists and not recording) */}
         {!recording && !loadingFile && samples.length > 0 && (
@@ -783,6 +804,25 @@ function App() {
           );
         })}
 
+        {/* Turn Detection Timeline */}
+        {turnResults.length > 0 && (
+          <>
+            <h3 className="text-sm font-medium pt-2">Turn Detection</h3>
+            <TurnTimeline
+              results={turnResults}
+              totalDurationMs={totalDurationMs}
+              viewport={viewport}
+              width={containerWidth}
+              height={32}
+              className="border rounded"
+              hoverTimeMs={hoverTimeMs}
+              onHoverTimeChange={setHoverTimeMs}
+              recording={recording}
+              playheadMs={!recording && playback.canPlay ? playback.state.positionMs : null}
+            />
+          </>
+        )}
+
         {/* Preprocessed Waveforms/Spectrograms/VAD - only for configs with showPreprocessed enabled */}
         {configs.filter((c) => showPreprocessed[c.id]).map((config) => {
           const configIndex = configs.findIndex((c) => c.id === config.id);
@@ -875,7 +915,7 @@ function App() {
 
       <Separator />
 
-      {/* Config Panel */}
+      {/* VAD Config Panel */}
       <ConfigPanel
         configs={configs}
         backends={backends}
@@ -887,6 +927,9 @@ function App() {
           setShowPreprocessed((prev) => ({ ...prev, [configId]: show }))
         }
       />
+
+      {/* Turn Detection Config Panel */}
+      <TurnConfigPanel config={turnConfig} onChange={setTurnConfig} />
 
       <Separator />
 

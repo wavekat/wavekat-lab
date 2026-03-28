@@ -4,6 +4,8 @@ use serde::Serialize;
 use std::collections::HashMap;
 use std::time::Instant;
 use tokio::sync::{broadcast, mpsc};
+use wavekat_turn::audio::PipecatSmartTurn;
+use wavekat_turn::{AudioFrame as TurnAudioFrame, AudioTurnDetector, TurnState};
 use wavekat_vad::preprocessing::Preprocessor;
 use wavekat_vad::{FrameAdapter, ProcessTimings, VoiceActivityDetector};
 
@@ -255,6 +257,86 @@ fn create_detector(
         }
         other => Err(format!("unknown backend: {other}")),
     }
+}
+
+/// A turn detection result from PipecatSmartTurn.
+#[derive(Debug, Clone, Serialize)]
+pub struct TurnResult {
+    /// Timestamp in milliseconds of the last audio frame included in this prediction.
+    pub timestamp_ms: f64,
+    /// Predicted state: "finished", "unfinished", or "wait".
+    pub state: String,
+    /// Confidence score in [0.0, 1.0].
+    pub confidence: f32,
+    /// Model inference latency in milliseconds.
+    pub latency_ms: u64,
+}
+
+/// Run the Pipecat turn detection pipeline.
+///
+/// Pushes every incoming audio frame (resampled to 16 kHz) into
+/// `PipecatSmartTurn` and calls `predict()` every `predict_every_frames`
+/// frames, forwarding each `TurnResult` to the returned receiver.
+pub fn run_turn_pipeline(
+    audio_tx: &broadcast::Sender<AudioFrame>,
+    sample_rate: u32,
+    predict_every_frames: u32,
+) -> mpsc::Receiver<TurnResult> {
+    let (result_tx, result_rx) = mpsc::channel::<TurnResult>(256);
+
+    let mut detector = match PipecatSmartTurn::new() {
+        Ok(d) => d,
+        Err(e) => {
+            tracing::error!("failed to create PipecatSmartTurn: {e}");
+            return result_rx;
+        }
+    };
+
+    let mut audio_rx = audio_tx.subscribe();
+
+    tokio::spawn(async move {
+        let mut frames_since_predict: u32 = 0;
+
+        while let Ok(frame) = audio_rx.recv().await {
+            // Pipecat requires 16 kHz audio
+            let samples = if sample_rate != 16000 {
+                resample_linear(&frame.samples, sample_rate, 16000)
+            } else {
+                frame.samples.clone()
+            };
+
+            let turn_frame = TurnAudioFrame::new(samples.as_slice(), 16000);
+            detector.push_audio(&turn_frame);
+            frames_since_predict += 1;
+
+            if frames_since_predict >= predict_every_frames {
+                frames_since_predict = 0;
+                match detector.predict() {
+                    Ok(prediction) => {
+                        let state = match prediction.state {
+                            TurnState::Finished => "finished",
+                            TurnState::Unfinished => "unfinished",
+                            TurnState::Wait => "wait",
+                        };
+                        let result = TurnResult {
+                            timestamp_ms: frame.timestamp_ms,
+                            state: state.to_string(),
+                            confidence: prediction.confidence,
+                            latency_ms: prediction.latency_ms,
+                        };
+                        if result_tx.send(result).await.is_err() {
+                            return;
+                        }
+                    }
+                    Err(e) => {
+                        tracing::warn!("turn prediction error: {e}");
+                    }
+                }
+            }
+        }
+    });
+
+    result_rx
 }
 
 /// Return the list of available backends and their configurable parameters.

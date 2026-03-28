@@ -13,6 +13,11 @@ fn default_max_duration_secs() -> u64 {
     120
 }
 
+/// Default turn prediction interval: every 50 frames = 500 ms at 10 ms/frame.
+fn default_predict_every_frames() -> u32 {
+    50
+}
+
 /// Messages sent from the client to the server.
 #[derive(Debug, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
@@ -36,6 +41,12 @@ pub enum ClientMessage {
     },
     SetSpectrumBins {
         bins: usize,
+    },
+    /// Configure Pipecat turn detection. Set `predict_every_frames` to 0 to disable.
+    SetTurnConfig {
+        /// How many 10 ms audio frames between each prediction. 0 = disabled.
+        #[serde(default = "default_predict_every_frames")]
+        predict_every_frames: u32,
     },
 }
 
@@ -89,6 +100,15 @@ pub enum ServerMessage {
         /// Frame duration in milliseconds (from backend capabilities).
         frame_duration_ms: u32,
     },
+    /// Pipecat turn detection prediction.
+    Turn {
+        timestamp_ms: f64,
+        /// "finished", "unfinished", or "wait"
+        state: String,
+        confidence: f32,
+        /// Model inference latency in milliseconds.
+        latency_ms: u64,
+    },
     Done,
     Error {
         message: String,
@@ -105,6 +125,7 @@ pub async fn handle_ws(socket: WebSocket) {
     let mut configs: Vec<VadConfig> = Vec::new();
     let mut stop_tx: Option<tokio::sync::oneshot::Sender<()>> = None;
     let mut spectrum_bins: usize = DEFAULT_OUTPUT_BINS;
+    let mut turn_predict_every_frames: u32 = default_predict_every_frames();
 
     // Use small frames (10ms); FrameAdapter handles buffering to each backend's requirements
     let frame_duration_ms: u32 = 10;
@@ -150,6 +171,13 @@ pub async fn handle_ws(socket: WebSocket) {
             } => {
                 tracing::info!(count = new_configs.len(), "configs updated");
                 configs = new_configs;
+            }
+
+            ClientMessage::SetTurnConfig {
+                predict_every_frames,
+            } => {
+                tracing::info!(predict_every_frames, "turn config updated");
+                turn_predict_every_frames = predict_every_frames;
             }
 
             ClientMessage::SetSpectrumBins { bins: new_bins } => {
@@ -198,6 +226,17 @@ pub async fn handle_ws(socket: WebSocket) {
                         let mut result_rx =
                             pipeline::run_pipeline(&configs, &audio_tx, sample_rate);
 
+                        // Start the turn detection pipeline
+                        let mut turn_rx = if turn_predict_every_frames > 0 {
+                            Some(pipeline::run_turn_pipeline(
+                                &audio_tx,
+                                sample_rate,
+                                turn_predict_every_frames,
+                            ))
+                        } else {
+                            None
+                        };
+
                         // Collect messages from both audio and pipeline into one channel
                         let (msg_tx, mut msg_rx) = tokio::sync::mpsc::channel::<ServerMessage>(512);
 
@@ -228,6 +267,24 @@ pub async fn handle_ws(socket: WebSocket) {
                                 }
                             }
                         });
+
+                        // Forward turn detection results
+                        if let Some(mut turn_rx) = turn_rx.take() {
+                            let msg_tx_turn = msg_tx.clone();
+                            tokio::spawn(async move {
+                                while let Some(result) = turn_rx.recv().await {
+                                    let turn_msg = ServerMessage::Turn {
+                                        timestamp_ms: result.timestamp_ms,
+                                        state: result.state,
+                                        confidence: result.confidence,
+                                        latency_ms: result.latency_ms,
+                                    };
+                                    if msg_tx_turn.send(turn_msg).await.is_err() {
+                                        break;
+                                    }
+                                }
+                            });
+                        }
 
                         // Forward VAD results with preprocessed audio and spectrum
                         let msg_tx_vad = msg_tx;
@@ -367,6 +424,17 @@ pub async fn handle_ws(socket: WebSocket) {
                 // Start pipeline BEFORE emitting frames so it receives everything
                 let result_rx = pipeline::run_pipeline(&configs, &audio_tx, sample_rate);
 
+                // Start turn detection BEFORE emitting frames
+                let turn_rx = if turn_predict_every_frames > 0 {
+                    Some(pipeline::run_turn_pipeline(
+                        &audio_tx,
+                        sample_rate,
+                        turn_predict_every_frames,
+                    ))
+                } else {
+                    None
+                };
+
                 // Emit all frames at full speed (no sleep)
                 audio_source::emit_frames(
                     &loaded.samples,
@@ -415,7 +483,25 @@ pub async fn handle_ws(socket: WebSocket) {
                     }
                 });
 
-                // Task 2: Forward VAD + preprocessed results
+                // Task 2: Forward turn detection results
+                if let Some(mut turn_rx) = turn_rx {
+                    let msg_tx_turn = msg_tx.clone();
+                    tokio::spawn(async move {
+                        while let Some(result) = turn_rx.recv().await {
+                            let turn_msg = ServerMessage::Turn {
+                                timestamp_ms: result.timestamp_ms,
+                                state: result.state,
+                                confidence: result.confidence,
+                                latency_ms: result.latency_ms,
+                            };
+                            if msg_tx_turn.send(turn_msg).await.is_err() {
+                                break;
+                            }
+                        }
+                    });
+                }
+
+                // Task 3: Forward VAD + preprocessed results
                 let msg_tx_vad = msg_tx;
                 let vad_bins = spectrum_bins;
                 let mut result_rx = result_rx;
