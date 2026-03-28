@@ -25,7 +25,7 @@ setup-backend:
 
 # Install frontend npm dependencies
 setup-frontend:
-	cd tools/lab/frontend && . "$$NVM_DIR/nvm.sh" && nvm use && npm install
+	cd frontend && . "$$NVM_DIR/nvm.sh" && nvm use && npm install
 
 # Run lab backend with auto-rebuild on file changes
 dev-backend:
@@ -33,7 +33,7 @@ dev-backend:
 
 # Run lab frontend dev server (uses .nvmrc for Node version)
 dev-frontend:
-	cd tools/lab/frontend && . "$$NVM_DIR/nvm.sh" && nvm use && npm run dev
+	cd frontend && . "$$NVM_DIR/nvm.sh" && nvm use && npm run dev
 
 # Run both frontend and backend (requires two terminals — use dev-backend + dev-frontend)
 dev:
@@ -66,4 +66,4 @@ ci-backend:
 
 # Run frontend CI checks (lint, build) — run setup-frontend first if deps are missing
 ci-frontend:
-	cd tools/lab/frontend && npm run lint && npm run build
+	cd frontend && npm run lint && npm run build

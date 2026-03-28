@@ -8,11 +8,11 @@
       "extra-files": [
         {
           "type": "generic",
-          "path": "tools/lab/backend/Cargo.toml"
+          "path": "backend/Cargo.toml"
         },
         {
           "type": "json",
-          "path": "tools/lab/frontend/package.json",
+          "path": "frontend/package.json",
           "jsonpath": "$.version"
         }
       ]
