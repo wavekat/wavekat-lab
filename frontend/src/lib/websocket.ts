@@ -42,7 +42,7 @@ export type ServerMessage =
   | { type: "preprocessed_spectrum"; config_id: string; timestamp_ms: number; magnitudes: number[] }
   | { type: "vad"; config_id: string; timestamp_ms: number; probability: number; inference_us: number; stage_times: Array<{ name: string; us: number }>; frame_duration_ms: number }
   | { type: "turn_backends"; backends: Record<string, ParamInfo[]> }
-  | { type: "turn"; config_id: string; timestamp_ms: number; state: string; confidence: number; latency_ms: number }
+  | { type: "turn"; config_id: string; timestamp_ms: number; state: string; confidence: number; latency_ms: number; stage_times: Array<{ name: string; us: number }> }
   | { type: "done" }
   | { type: "error"; message: string };
 

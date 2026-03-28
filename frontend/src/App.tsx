@@ -14,7 +14,7 @@ import { FrequencySpectrum } from "@/components/FrequencySpectrum";
 import { ConfigPanel } from "@/components/ConfigPanel";
 import { LogPanel } from "@/components/LogPanel";
 import { ZoomControls } from "@/components/ZoomControls";
-import { TurnTimeline, type TurnResultPoint } from "@/components/TurnTimeline";
+import { TurnTimeline, type TurnResultPoint, STATE_COLORS as TURN_STATE_COLORS } from "@/components/TurnTimeline";
 import { TurnConfigPanel } from "@/components/TurnConfigPanel";
 import {
   type Viewport,
@@ -172,6 +172,9 @@ function App() {
   const [spectrumBins, setSpectrumBins] = useState(256);
   const [turnConfigs, setTurnConfigs] = useState<TurnConfig[]>([]);
   const [turnResults, setTurnResults] = useState<Record<string, TurnResultPoint[]>>({});
+  const [turnTiming, setTurnTiming] = useState<
+    Record<string, { stageTotals: Record<string, number>; count: number }>
+  >({});
   const [vadOpen, setVadOpen] = useState(true);
   const [turnOpen, setTurnOpen] = useState(true);
 
@@ -384,6 +387,14 @@ function App() {
             },
           ],
         }));
+        setTurnTiming((prev) => {
+          const existing = prev[msg.config_id] ?? { stageTotals: {}, count: 0 };
+          const stageTotals = { ...existing.stageTotals };
+          for (const st of msg.stage_times ?? []) {
+            stageTotals[st.name] = (stageTotals[st.name] ?? 0) + st.us;
+          }
+          return { ...prev, [msg.config_id]: { stageTotals, count: existing.count + 1 } };
+        });
         break;
 
       case "done":
@@ -439,6 +450,7 @@ function App() {
     setPreprocessedSamples({});
     setPreprocessedSpectrumData({});
     setTurnResults({});
+    setTurnTiming({});
     setPlaybackSource("original");
     setTotalDurationMs(0);
     setSampleRate(null);
@@ -485,6 +497,7 @@ function App() {
     setPreprocessedSamples({});
     setPreprocessedSpectrumData({});
     setTurnResults({});
+    setTurnTiming({});
     setPlaybackSource("original");
     setTotalDurationMs(0);
     setSampleRate(null);
@@ -842,26 +855,44 @@ function App() {
           >
             <span className="text-muted-foreground text-xs">{turnOpen ? "▼" : "▶"}</span>
             Turn Detection
+            <div className="flex gap-2 items-center ml-auto" onClick={(e) => e.stopPropagation()}>
+              {(["finished", "unfinished", "wait"] as const).map((state) => (
+                <span key={state} className="flex items-center gap-1">
+                  <span className="inline-block w-2 h-2 rounded-sm" style={{ background: TURN_STATE_COLORS[state] }} />
+                  <span className="text-xs text-muted-foreground font-mono">{state}</span>
+                </span>
+              ))}
+            </div>
           </button>
         )}
-        {turnOpen && turnConfigs.map((config) => (
-          <TurnTimeline
-            key={config.id}
-            configId={config.id}
-            label={config.label}
-            config={config}
-            results={turnResults[config.id] ?? []}
-            totalDurationMs={totalDurationMs}
-            viewport={viewport}
-            width={containerWidth}
-            height={32}
-            className="border rounded"
-            hoverTimeMs={hoverTimeMs}
-            onHoverTimeChange={setHoverTimeMs}
-            recording={recording}
-            playheadMs={!recording && playback.canPlay ? playback.state.positionMs : null}
-          />
-        ))}
+        {turnOpen && turnConfigs.map((config) => {
+          const timing = turnTiming[config.id];
+          const stageAvgs = timing && timing.count > 0
+            ? Object.entries(timing.stageTotals).map(([name, totalUs]) => ({
+                name,
+                us: totalUs / timing.count,
+              }))
+            : undefined;
+          return (
+            <TurnTimeline
+              key={config.id}
+              configId={config.id}
+              label={config.label}
+              config={config}
+              results={turnResults[config.id] ?? []}
+              stageAvgs={stageAvgs}
+              totalDurationMs={totalDurationMs}
+              viewport={viewport}
+              width={containerWidth}
+              height={32}
+              className="border rounded"
+              hoverTimeMs={hoverTimeMs}
+              onHoverTimeChange={setHoverTimeMs}
+              recording={recording}
+              playheadMs={!recording && playback.canPlay ? playback.state.positionMs : null}
+            />
+          );
+        })}
 
         {/* Preprocessed Waveforms/Spectrograms/VAD - only for configs with showPreprocessed enabled */}
         {vadOpen && configs.filter((c) => showPreprocessed[c.id]).map((config) => {

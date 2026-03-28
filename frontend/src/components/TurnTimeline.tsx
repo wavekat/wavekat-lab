@@ -1,4 +1,6 @@
-import { useRef, useEffect, useCallback } from "react";
+import { useRef, useEffect, useCallback, useMemo } from "react";
+import { Info } from "lucide-react";
+import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { type Viewport, pixelToTime, timeToPixel } from "@/lib/viewport";
 import { type TurnConfig } from "@/lib/websocket";
 
@@ -14,6 +16,8 @@ interface TurnTimelineProps {
   label: string;
   config?: TurnConfig;
   results: TurnResultPoint[];
+  /** Per-stage average timing breakdown in µs/prediction. */
+  stageAvgs?: Array<{ name: string; us: number }>;
   totalDurationMs: number;
   viewport: Viewport;
   width?: number;
@@ -35,7 +39,12 @@ function formatConfigSummary(config: TurnConfig): string {
   return parts.join(" | ");
 }
 
-const STATE_COLORS: Record<string, string> = {
+function formatTiming(us: number): string {
+  if (us >= 1000) return `${(us / 1000).toFixed(1)}ms`;
+  return `${us < 10 ? us.toFixed(1) : Math.round(us)}µs`;
+}
+
+export const STATE_COLORS: Record<string, string> = {
   finished: "#22c55e",
   unfinished: "#6b7280",
   wait: "#f59e0b",
@@ -46,6 +55,7 @@ export function TurnTimeline({
   label,
   config,
   results,
+  stageAvgs,
   totalDurationMs,
   viewport,
   width = 800,
@@ -157,10 +167,31 @@ export function TurnTimeline({
   }, [results, totalDurationMs, effectiveViewport, width, height, hoverTimeMs, playheadMs]);
 
   // Find hovered prediction for tooltip
-  const hoveredResult =
+  const hoveredIndex =
     hoverTimeMs != null
-      ? [...results].reverse().find((r) => r.timestamp_ms <= hoverTimeMs)
-      : null;
+      ? results.reduce((best, r, i) => (r.timestamp_ms <= hoverTimeMs ? i : best), -1)
+      : -1;
+  const hoveredResult = hoveredIndex >= 0 ? results[hoveredIndex] : null;
+
+  // Compute average RTF from all results
+  const rtfStats = useMemo(() => {
+    if (results.length < 2) return null;
+    let totalLatency = 0;
+    let totalInterval = 0;
+    let count = 0;
+    for (let i = 1; i < results.length; i++) {
+      const interval = results[i].timestamp_ms - results[i - 1].timestamp_ms;
+      if (interval > 0) {
+        totalLatency += results[i].latency_ms;
+        totalInterval += interval;
+        count++;
+      }
+    }
+    if (count === 0) return null;
+    const avgLatency = totalLatency / count;
+    const avgInterval = totalInterval / count;
+    return { rtf: avgLatency / avgInterval, avgLatencyMs: avgLatency, avgIntervalMs: avgInterval };
+  }, [results]);
 
   return (
     <div className="mb-4">
@@ -174,13 +205,48 @@ export function TurnTimeline({
             </span>
           )}
         </div>
-        <div className="flex gap-2 items-center ml-auto">
-          {(["finished", "unfinished", "wait"] as const).map((state) => (
-            <span key={state} className="flex items-center gap-1">
-              <span className="inline-block w-2 h-2 rounded-sm" style={{ background: STATE_COLORS[state] }} />
-              <span className="text-xs text-muted-foreground font-mono">{state}</span>
-            </span>
-          ))}
+        <div className="flex gap-4 items-center ml-auto">
+          {rtfStats != null && (
+            <div className="text-xs text-muted-foreground font-mono flex items-baseline gap-1">
+              <div className="flex flex-col items-end">
+                <span className="tabular-nums">RTF {rtfStats.rtf.toFixed(4)}</span>
+                {stageAvgs && stageAvgs.length > 0 && (
+                  <span className="opacity-70">({stageAvgs.map((s) =>
+                    `${s.name}: ${formatTiming(s.us)}`
+                  ).join(" → ")})</span>
+                )}
+              </div>
+              <Tooltip>
+                <TooltipTrigger className="text-muted-foreground/50 hover:text-muted-foreground transition-colors">
+                  <Info className="size-3" />
+                </TooltipTrigger>
+                <TooltipContent side="left" align="start" className="block max-w-none font-mono text-[11px] leading-relaxed py-2">
+                  <div className="whitespace-nowrap opacity-70 mb-1">RTF = avg latency / avg predict interval</div>
+                  <table className="border-spacing-x-2 border-separate">
+                    <tbody>
+                      <tr>
+                        <td className="text-right opacity-70">avg interval</td>
+                        <td className="whitespace-nowrap">{rtfStats.avgIntervalMs.toFixed(1)}ms ({(rtfStats.avgIntervalMs * 1000).toLocaleString()}µs)</td>
+                      </tr>
+                      {stageAvgs && stageAvgs.map((s) => (
+                        <tr key={s.name}>
+                          <td className="text-right opacity-70">{s.name}</td>
+                          <td>{formatTiming(s.us)}</td>
+                        </tr>
+                      ))}
+                      <tr>
+                        <td className="text-right font-semibold pt-0.5 border-t border-background/20">total</td>
+                        <td className="whitespace-nowrap pt-0.5 border-t border-background/20">
+                          {rtfStats.avgLatencyMs.toFixed(1)}ms / {rtfStats.avgIntervalMs.toFixed(1)}ms ≈ <span className="font-semibold">{rtfStats.rtf.toFixed(4)}</span>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                  <div className="mt-1 opacity-70">Lower is better. RTF &lt; 1 = faster than real-time.</div>
+                </TooltipContent>
+              </Tooltip>
+            </div>
+          )}
         </div>
       </div>
 

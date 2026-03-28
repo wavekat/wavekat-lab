@@ -106,6 +106,8 @@ pub enum ServerMessage {
         confidence: f32,
         /// Model inference latency in milliseconds.
         latency_ms: u64,
+        /// Per-stage timing breakdown (e.g. audio_prep, mel, onnx).
+        stage_times: Vec<pipeline::StageTiming>,
     },
     Done,
     Error {
@@ -284,6 +286,7 @@ pub async fn handle_ws(socket: WebSocket) {
                                         state: result.state,
                                         confidence: result.confidence,
                                         latency_ms: result.latency_ms,
+                                        stage_times: result.stage_times,
                                     };
                                     if msg_tx_turn.send(turn_msg).await.is_err() {
                                         break;
@@ -500,6 +503,7 @@ pub async fn handle_ws(socket: WebSocket) {
                                 state: result.state,
                                 confidence: result.confidence,
                                 latency_ms: result.latency_ms,
+                                stage_times: result.stage_times,
                             };
                             if msg_tx_turn.send(turn_msg).await.is_err() {
                                 break;

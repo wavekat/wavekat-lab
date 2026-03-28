@@ -285,6 +285,8 @@ pub struct TurnResult {
     pub confidence: f32,
     /// Model inference latency in milliseconds.
     pub latency_ms: u64,
+    /// Per-stage timing breakdown in pipeline order.
+    pub stage_times: Vec<StageTiming>,
 }
 
 /// Run the turn detection pipeline for multiple configs concurrently.
@@ -350,6 +352,10 @@ pub fn run_turn_pipeline(
                                 state: state.to_string(),
                                 confidence: prediction.confidence,
                                 latency_ms: prediction.latency_ms,
+                                stage_times: prediction.stage_times.iter().map(|s| StageTiming {
+                                    name: s.name.to_string(),
+                                    us: s.us,
+                                }).collect(),
                             };
                             if result_tx.send(result).await.is_err() {
                                 return;
