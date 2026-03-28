@@ -849,6 +849,7 @@ function App() {
             key={config.id}
             configId={config.id}
             label={config.label}
+            config={config}
             results={turnResults[config.id] ?? []}
             totalDurationMs={totalDurationMs}
             viewport={viewport}

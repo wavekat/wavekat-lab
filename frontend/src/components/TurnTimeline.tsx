@@ -1,5 +1,6 @@
 import { useRef, useEffect, useCallback } from "react";
 import { type Viewport, pixelToTime, timeToPixel } from "@/lib/viewport";
+import { type TurnConfig } from "@/lib/websocket";
 
 export interface TurnResultPoint {
   timestamp_ms: number;
@@ -11,6 +12,7 @@ export interface TurnResultPoint {
 interface TurnTimelineProps {
   configId: string;
   label: string;
+  config?: TurnConfig;
   results: TurnResultPoint[];
   totalDurationMs: number;
   viewport: Viewport;
@@ -23,6 +25,16 @@ interface TurnTimelineProps {
   playheadMs?: number | null;
 }
 
+function formatConfigSummary(config: TurnConfig): string {
+  const parts: string[] = [config.backend];
+  for (const [key, value] of Object.entries(config.params)) {
+    if (value != null && value !== "") {
+      parts.push(`${key}:${String(value)}`);
+    }
+  }
+  return parts.join(" | ");
+}
+
 const STATE_COLORS: Record<string, string> = {
   finished: "#22c55e",
   unfinished: "#6b7280",
@@ -32,6 +44,7 @@ const STATE_COLORS: Record<string, string> = {
 export function TurnTimeline({
   configId: _configId,
   label,
+  config,
   results,
   totalDurationMs,
   viewport,
@@ -100,9 +113,11 @@ export function TurnTimeline({
         if (result.timestamp_ms < effectiveViewport.viewStartMs - 1000) continue;
         if (result.timestamp_ms > viewEndMs + 1000) continue;
 
-        // Segment spans from previous prediction to this one
-        const segStartMs = i === 0 ? 0 : results[i - 1].timestamp_ms;
+        // Segment spans from previous prediction to this one.
+        // Skip the first result to avoid backfilling before detection started.
+        const segStartMs = i === 0 ? result.timestamp_ms : results[i - 1].timestamp_ms;
         const segEndMs = result.timestamp_ms;
+        if (segStartMs >= segEndMs) continue;
 
         const x1 = timeToPixel(segStartMs, width, effectiveViewport);
         const x2 = timeToPixel(segEndMs, width, effectiveViewport);
@@ -148,27 +163,37 @@ export function TurnTimeline({
       : null;
 
   return (
-    <div className="flex items-center gap-2">
-      {/* Label */}
-      <div className="flex-none w-32 text-xs text-muted-foreground truncate text-right pr-1">
-        {label}
-        <div className="flex gap-1 justify-end mt-0.5">
-          <span className="inline-block w-2 h-2 rounded-sm" style={{ background: STATE_COLORS.finished }} />
-          <span className="inline-block w-2 h-2 rounded-sm" style={{ background: STATE_COLORS.unfinished }} />
-          <span className="inline-block w-2 h-2 rounded-sm" style={{ background: STATE_COLORS.wait }} />
+    <div className="mb-4">
+      {/* Label row */}
+      <div className="flex items-baseline gap-2 mb-1">
+        <div className="flex flex-col">
+          <span className="text-xs font-medium font-mono">{label}</span>
+          {config && (
+            <span className="text-xs text-muted-foreground font-mono">
+              {formatConfigSummary(config)}
+            </span>
+          )}
+        </div>
+        <div className="flex gap-2 items-center ml-auto">
+          {(["finished", "unfinished", "wait"] as const).map((state) => (
+            <span key={state} className="flex items-center gap-1">
+              <span className="inline-block w-2 h-2 rounded-sm" style={{ background: STATE_COLORS[state] }} />
+              <span className="text-xs text-muted-foreground font-mono">{state}</span>
+            </span>
+          ))}
         </div>
       </div>
 
       {/* Canvas */}
       <div
-        className="relative flex-1"
+        className={`relative ${className ?? ""}`}
         onMouseMove={handleMouseMove}
         onMouseLeave={handleMouseLeave}
+        style={{ width, height }}
       >
         <canvas
           ref={canvasRef}
           style={{ width, height, display: "block" }}
-          className={className}
         />
         {/* Hover tooltip */}
         {hoveredResult && (
