@@ -13,11 +13,6 @@ fn default_max_duration_secs() -> u64 {
     120
 }
 
-/// Default turn prediction interval: every 50 frames = 500 ms at 10 ms/frame.
-fn default_predict_every_frames() -> u32 {
-    50
-}
-
 /// Messages sent from the client to the server.
 #[derive(Debug, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
@@ -42,11 +37,10 @@ pub enum ClientMessage {
     SetSpectrumBins {
         bins: usize,
     },
-    /// Configure Pipecat turn detection. Set `predict_every_frames` to 0 to disable.
-    SetTurnConfig {
-        /// How many 10 ms audio frames between each prediction. 0 = disabled.
-        #[serde(default = "default_predict_every_frames")]
-        predict_every_frames: u32,
+    ListTurnBackends,
+    /// Set the active turn detection configs (replaces previous list).
+    SetTurnConfigs {
+        configs: Vec<pipeline::TurnConfig>,
     },
 }
 
@@ -100,8 +94,12 @@ pub enum ServerMessage {
         /// Frame duration in milliseconds (from backend capabilities).
         frame_duration_ms: u32,
     },
-    /// Pipecat turn detection prediction.
+    TurnBackends {
+        backends: std::collections::HashMap<String, Vec<pipeline::ParamInfo>>,
+    },
+    /// Turn detection prediction from a specific config.
     Turn {
+        config_id: String,
         timestamp_ms: f64,
         /// "finished", "unfinished", or "wait"
         state: String,
@@ -123,9 +121,9 @@ fn send_msg(msg: &ServerMessage) -> Message {
 pub async fn handle_ws(socket: WebSocket) {
     let (mut ws_tx, mut ws_rx) = socket.split();
     let mut configs: Vec<VadConfig> = Vec::new();
+    let mut turn_configs: Vec<pipeline::TurnConfig> = Vec::new();
     let mut stop_tx: Option<tokio::sync::oneshot::Sender<()>> = None;
     let mut spectrum_bins: usize = DEFAULT_OUTPUT_BINS;
-    let mut turn_predict_every_frames: u32 = default_predict_every_frames();
 
     // Use small frames (10ms); FrameAdapter handles buffering to each backend's requirements
     let frame_duration_ms: u32 = 10;
@@ -173,11 +171,18 @@ pub async fn handle_ws(socket: WebSocket) {
                 configs = new_configs;
             }
 
-            ClientMessage::SetTurnConfig {
-                predict_every_frames,
+            ClientMessage::ListTurnBackends => {
+                let backends = pipeline::available_turn_backends();
+                let _ = ws_tx
+                    .send(send_msg(&ServerMessage::TurnBackends { backends }))
+                    .await;
+            }
+
+            ClientMessage::SetTurnConfigs {
+                configs: new_turn_configs,
             } => {
-                tracing::info!(predict_every_frames, "turn config updated");
-                turn_predict_every_frames = predict_every_frames;
+                tracing::info!(count = new_turn_configs.len(), "turn configs updated");
+                turn_configs = new_turn_configs;
             }
 
             ClientMessage::SetSpectrumBins { bins: new_bins } => {
@@ -227,11 +232,11 @@ pub async fn handle_ws(socket: WebSocket) {
                             pipeline::run_pipeline(&configs, &audio_tx, sample_rate);
 
                         // Start the turn detection pipeline
-                        let mut turn_rx = if turn_predict_every_frames > 0 {
+                        let mut turn_rx = if !turn_configs.is_empty() {
                             Some(pipeline::run_turn_pipeline(
+                                &turn_configs,
                                 &audio_tx,
                                 sample_rate,
-                                turn_predict_every_frames,
                             ))
                         } else {
                             None
@@ -274,6 +279,7 @@ pub async fn handle_ws(socket: WebSocket) {
                             tokio::spawn(async move {
                                 while let Some(result) = turn_rx.recv().await {
                                     let turn_msg = ServerMessage::Turn {
+                                        config_id: result.config_id,
                                         timestamp_ms: result.timestamp_ms,
                                         state: result.state,
                                         confidence: result.confidence,
@@ -425,11 +431,11 @@ pub async fn handle_ws(socket: WebSocket) {
                 let result_rx = pipeline::run_pipeline(&configs, &audio_tx, sample_rate);
 
                 // Start turn detection BEFORE emitting frames
-                let turn_rx = if turn_predict_every_frames > 0 {
+                let turn_rx = if !turn_configs.is_empty() {
                     Some(pipeline::run_turn_pipeline(
+                        &turn_configs,
                         &audio_tx,
                         sample_rate,
-                        turn_predict_every_frames,
                     ))
                 } else {
                     None
@@ -489,6 +495,7 @@ pub async fn handle_ws(socket: WebSocket) {
                     tokio::spawn(async move {
                         while let Some(result) = turn_rx.recv().await {
                             let turn_msg = ServerMessage::Turn {
+                                config_id: result.config_id,
                                 timestamp_ms: result.timestamp_ms,
                                 state: result.state,
                                 confidence: result.confidence,

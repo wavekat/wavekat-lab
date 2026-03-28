@@ -1,6 +1,6 @@
 use crate::audio_source::AudioFrame;
 use crate::session::VadConfig;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::time::Instant;
 use tokio::sync::{broadcast, mpsc};
@@ -259,9 +259,24 @@ fn create_detector(
     }
 }
 
-/// A turn detection result from PipecatSmartTurn.
+/// Configuration for a single turn detection instance.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TurnConfig {
+    /// Unique identifier for this config.
+    pub id: String,
+    /// Human-readable label.
+    pub label: String,
+    /// Backend name: currently only "pipecat".
+    pub backend: String,
+    /// Backend-specific parameters.
+    pub params: HashMap<String, serde_json::Value>,
+}
+
+/// A turn detection result.
 #[derive(Debug, Clone, Serialize)]
 pub struct TurnResult {
+    /// Config ID that produced this result.
+    pub config_id: String,
     /// Timestamp in milliseconds of the last audio frame included in this prediction.
     pub timestamp_ms: f64,
     /// Predicted state: "finished", "unfinished", or "wait".
@@ -272,71 +287,121 @@ pub struct TurnResult {
     pub latency_ms: u64,
 }
 
-/// Run the Pipecat turn detection pipeline.
+/// Run the turn detection pipeline for multiple configs concurrently.
 ///
-/// Pushes every incoming audio frame (resampled to 16 kHz) into
-/// `PipecatSmartTurn` and calls `predict()` every `predict_every_frames`
-/// frames, forwarding each `TurnResult` to the returned receiver.
+/// Each config gets its own async task. All results flow into the returned
+/// receiver, tagged with `config_id`. Mirrors `run_pipeline` for VAD.
 pub fn run_turn_pipeline(
+    configs: &[TurnConfig],
     audio_tx: &broadcast::Sender<AudioFrame>,
     sample_rate: u32,
-    predict_every_frames: u32,
 ) -> mpsc::Receiver<TurnResult> {
     let (result_tx, result_rx) = mpsc::channel::<TurnResult>(256);
 
-    let mut detector = match PipecatSmartTurn::new() {
-        Ok(d) => d,
-        Err(e) => {
-            tracing::error!("failed to create PipecatSmartTurn: {e}");
-            return result_rx;
-        }
-    };
+    for config in configs {
+        let mut detector = match create_turn_detector(config) {
+            Ok(d) => d,
+            Err(e) => {
+                tracing::error!(config_id = %config.id, "failed to create turn detector: {e}");
+                continue;
+            }
+        };
 
-    let mut audio_rx = audio_tx.subscribe();
+        // predict_interval_ms is stored as a string (SelectOption value)
+        let interval_ms = config
+            .params
+            .get("predict_interval_ms")
+            .and_then(|v| v.as_str().and_then(|s| s.parse::<u64>().ok()))
+            .unwrap_or(500);
+        // Each audio frame is 10 ms
+        let predict_every_frames = (interval_ms / 10).max(1) as u32;
 
-    tokio::spawn(async move {
-        let mut frames_since_predict: u32 = 0;
+        let config_id = config.id.clone();
+        let mut audio_rx = audio_tx.subscribe();
+        let result_tx = result_tx.clone();
 
-        while let Ok(frame) = audio_rx.recv().await {
-            // Pipecat requires 16 kHz audio
-            let samples = if sample_rate != 16000 {
-                resample_linear(&frame.samples, sample_rate, 16000)
-            } else {
-                frame.samples.clone()
-            };
+        tokio::spawn(async move {
+            let mut frames_since_predict: u32 = 0;
 
-            let turn_frame = TurnAudioFrame::new(samples.as_slice(), 16000);
-            detector.push_audio(&turn_frame);
-            frames_since_predict += 1;
+            while let Ok(frame) = audio_rx.recv().await {
+                // Pipecat requires 16 kHz audio
+                let samples = if sample_rate != 16000 {
+                    resample_linear(&frame.samples, sample_rate, 16000)
+                } else {
+                    frame.samples.clone()
+                };
 
-            if frames_since_predict >= predict_every_frames {
-                frames_since_predict = 0;
-                match detector.predict() {
-                    Ok(prediction) => {
-                        let state = match prediction.state {
-                            TurnState::Finished => "finished",
-                            TurnState::Unfinished => "unfinished",
-                            TurnState::Wait => "wait",
-                        };
-                        let result = TurnResult {
-                            timestamp_ms: frame.timestamp_ms,
-                            state: state.to_string(),
-                            confidence: prediction.confidence,
-                            latency_ms: prediction.latency_ms,
-                        };
-                        if result_tx.send(result).await.is_err() {
-                            return;
+                let turn_frame = TurnAudioFrame::new(samples.as_slice(), 16000);
+                detector.push_audio(&turn_frame);
+                frames_since_predict += 1;
+
+                if frames_since_predict >= predict_every_frames {
+                    frames_since_predict = 0;
+                    match detector.predict() {
+                        Ok(prediction) => {
+                            let state = match prediction.state {
+                                TurnState::Finished => "finished",
+                                TurnState::Unfinished => "unfinished",
+                                TurnState::Wait => "wait",
+                            };
+                            let result = TurnResult {
+                                config_id: config_id.clone(),
+                                timestamp_ms: frame.timestamp_ms,
+                                state: state.to_string(),
+                                confidence: prediction.confidence,
+                                latency_ms: prediction.latency_ms,
+                            };
+                            if result_tx.send(result).await.is_err() {
+                                return;
+                            }
                         }
-                    }
-                    Err(e) => {
-                        tracing::warn!("turn prediction error: {e}");
+                        Err(e) => {
+                            tracing::warn!(config_id = %config_id, "turn prediction error: {e}");
+                        }
                     }
                 }
             }
-        }
-    });
+        });
+    }
+
+    // Drop original sender so result_rx completes when all tasks finish
+    drop(result_tx);
 
     result_rx
+}
+
+/// Create a turn detector from a config.
+fn create_turn_detector(config: &TurnConfig) -> Result<Box<dyn AudioTurnDetector>, String> {
+    match config.backend.as_str() {
+        "pipecat" => {
+            let detector = PipecatSmartTurn::new()
+                .map_err(|e| format!("failed to create PipecatSmartTurn: {e}"))?;
+            Ok(Box::new(detector))
+        }
+        other => Err(format!("unknown turn backend: {other}")),
+    }
+}
+
+/// Return the list of available turn detection backends and their parameters.
+pub fn available_turn_backends() -> HashMap<String, Vec<ParamInfo>> {
+    let mut backends = HashMap::new();
+
+    backends.insert(
+        "pipecat".to_string(),
+        vec![ParamInfo {
+            name: "predict_interval_ms".to_string(),
+            description: "Prediction interval".to_string(),
+            param_type: ParamType::Select(vec![
+                SelectOption { value: "200".into(), label: "200 ms".into() },
+                SelectOption { value: "500".into(), label: "500 ms".into() },
+                SelectOption { value: "1000".into(), label: "1000 ms".into() },
+                SelectOption { value: "2000".into(), label: "2000 ms".into() },
+            ]),
+            default: serde_json::json!("500"),
+        }],
+    );
+
+    backends
 }
 
 /// Return the list of available backends and their configurable parameters.

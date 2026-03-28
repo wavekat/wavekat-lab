@@ -9,6 +9,8 @@ export interface TurnResultPoint {
 }
 
 interface TurnTimelineProps {
+  configId: string;
+  label: string;
   results: TurnResultPoint[];
   totalDurationMs: number;
   viewport: Viewport;
@@ -28,6 +30,8 @@ const STATE_COLORS: Record<string, string> = {
 };
 
 export function TurnTimeline({
+  configId: _configId,
+  label,
   results,
   totalDurationMs,
   viewport,
@@ -147,7 +151,7 @@ export function TurnTimeline({
     <div className="flex items-center gap-2">
       {/* Label */}
       <div className="flex-none w-32 text-xs text-muted-foreground truncate text-right pr-1">
-        Pipecat Turn
+        {label}
         <div className="flex gap-1 justify-end mt-0.5">
           <span className="inline-block w-2 h-2 rounded-sm" style={{ background: STATE_COLORS.finished }} />
           <span className="inline-block w-2 h-2 rounded-sm" style={{ background: STATE_COLORS.unfinished }} />

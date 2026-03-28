@@ -135,16 +135,13 @@ export function ConfigPanel({
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between">
-        <h3 className="text-sm font-medium">VAD Configurations</h3>
-        <div className="flex gap-2">
-          <Button size="sm" variant="outline" onClick={addConfig}>
-            + Add Config
-          </Button>
-          <Button size="sm" variant="outline" onClick={onResetDefaults}>
-            Reset Configs
-          </Button>
-        </div>
+      <div className="flex items-center justify-end gap-2">
+        <Button size="sm" variant="outline" onClick={addConfig}>
+          + Add Config
+        </Button>
+        <Button size="sm" variant="outline" onClick={onResetDefaults}>
+          Reset Configs
+        </Button>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
