@@ -17,6 +17,13 @@ export interface VadConfig {
   preprocessing?: PreprocessorConfig;
 }
 
+export interface TurnConfig {
+  id: string;
+  label: string;
+  backend: string;
+  params: Record<string, unknown>;
+}
+
 export interface ParamInfo {
   name: string;
   description: string;
@@ -34,6 +41,8 @@ export type ServerMessage =
   | { type: "preprocessed_audio"; config_id: string; timestamp_ms: number; samples: number[] }
   | { type: "preprocessed_spectrum"; config_id: string; timestamp_ms: number; magnitudes: number[] }
   | { type: "vad"; config_id: string; timestamp_ms: number; probability: number; inference_us: number; stage_times: Array<{ name: string; us: number }>; frame_duration_ms: number }
+  | { type: "turn_backends"; backends: Record<string, ParamInfo[]> }
+  | { type: "turn"; config_id: string; timestamp_ms: number; state: string; confidence: number; latency_ms: number; stage_times: Array<{ name: string; us: number }> }
   | { type: "done" }
   | { type: "error"; message: string };
 
@@ -45,7 +54,9 @@ export type ClientMessage =
   | { type: "stop_recording" }
   | { type: "load_file"; path: string; channel?: "mixed" | "left" | "right" }
   | { type: "set_configs"; configs: VadConfig[] }
-  | { type: "set_spectrum_bins"; bins: number };
+  | { type: "set_spectrum_bins"; bins: number }
+  | { type: "list_turn_backends" }
+  | { type: "set_turn_configs"; configs: TurnConfig[] };
 
 export type MessageHandler = (msg: ServerMessage) => void;
 
@@ -346,6 +357,8 @@ function summarizeServer(msg: ServerMessage): string {
     case "preprocessed_audio": return `preprocessed_audio [${msg.config_id}] t=${msg.timestamp_ms.toFixed(0)}ms`;
     case "preprocessed_spectrum": return `preprocessed_spectrum [${msg.config_id}] t=${msg.timestamp_ms.toFixed(0)}ms`;
     case "vad": return `vad [${msg.config_id}] t=${msg.timestamp_ms.toFixed(0)}ms p=${msg.probability.toFixed(2)}`;
+    case "turn_backends": return `turn_backends (${Object.keys(msg.backends).length})`;
+    case "turn": return `turn [${msg.config_id}] t=${msg.timestamp_ms.toFixed(0)}ms state=${msg.state} conf=${msg.confidence.toFixed(2)} lat=${msg.latency_ms}ms`;
     case "done": return "done";
     case "error": return `error: ${msg.message}`;
   }
@@ -360,5 +373,7 @@ function summarizeClient(msg: ClientMessage): string {
     case "load_file": return `load_file (${msg.path})`;
     case "set_configs": return `set_configs (${msg.configs.length})`;
     case "set_spectrum_bins": return `set_spectrum_bins (${msg.bins})`;
+    case "list_turn_backends": return "list_turn_backends";
+    case "set_turn_configs": return `set_turn_configs (${msg.configs.length})`;
   }
 }

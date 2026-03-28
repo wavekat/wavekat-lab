@@ -14,6 +14,9 @@ import { FrequencySpectrum } from "@/components/FrequencySpectrum";
 import { ConfigPanel } from "@/components/ConfigPanel";
 import { LogPanel } from "@/components/LogPanel";
 import { ZoomControls } from "@/components/ZoomControls";
+import { TurnTimeline, type TurnResultPoint } from "@/components/TurnTimeline";
+import { STATE_COLORS as TURN_STATE_COLORS } from "@/lib/turnColors";
+import { TurnConfigPanel } from "@/components/TurnConfigPanel";
 import {
   type Viewport,
   createDefaultViewport,
@@ -24,6 +27,7 @@ import {
   VadLabSocket,
   type AudioDevice,
   type VadConfig,
+  type TurnConfig,
   type ParamInfo,
   type ServerMessage,
   type ConnectionState,
@@ -139,6 +143,7 @@ function App() {
   const [connectionState, setConnectionState] = useState<ConnectionState>("disconnected");
   const [devices, setDevices] = useState<AudioDevice[]>([]);
   const [backends, setBackends] = useState<Record<string, ParamInfo[]>>({});
+  const [turnBackends, setTurnBackends] = useState<Record<string, ParamInfo[]>>({});
   const [preprocessingParams, setPreprocessingParams] = useState<ParamInfo[]>([]);
   const [selectedDevice, setSelectedDevice] = useState<string>("");
   const [recording, setRecording] = useState(false);
@@ -166,6 +171,13 @@ function App() {
   const [hoverTimeMs, setHoverTimeMs] = useState<number | null>(null);
   const [viewport, setViewport] = useState<Viewport>(createDefaultViewport);
   const [spectrumBins, setSpectrumBins] = useState(256);
+  const [turnConfigs, setTurnConfigs] = useState<TurnConfig[]>([]);
+  const [turnResults, setTurnResults] = useState<Record<string, TurnResultPoint[]>>({});
+  const [turnTiming, setTurnTiming] = useState<
+    Record<string, { stageTotals: Record<string, number>; count: number }>
+  >({});
+  const [vadOpen, setVadOpen] = useState(true);
+  const [turnOpen, setTurnOpen] = useState(true);
 
   // Preprocessed data per config
   const [preprocessedSamples, setPreprocessedSamples] = useState<Record<string, number[]>>({});
@@ -230,6 +242,7 @@ function App() {
   const fetchInitialData = useCallback((socket: VadLabSocket) => {
     socket.send({ type: "list_devices" });
     socket.send({ type: "list_backends" });
+    socket.send({ type: "list_turn_backends" });
   }, []);
 
   const handleMessage = useCallback((msg: ServerMessage) => {
@@ -346,6 +359,45 @@ function App() {
         }));
         break;
 
+      case "turn_backends":
+        setTurnBackends(msg.backends);
+        // Create default turn config on first receipt if none exist
+        setTurnConfigs((prev) => {
+          if (prev.length > 0) return prev;
+          const backendNames = Object.keys(msg.backends);
+          if (backendNames.length === 0) return prev;
+          const backend = backendNames[0];
+          const params: Record<string, unknown> = {};
+          for (const p of msg.backends[backend]) {
+            params[p.name] = p.default;
+          }
+          return [{ id: "turn-1", label: "turn-1", backend, params }];
+        });
+        break;
+
+      case "turn":
+        setTurnResults((prev) => ({
+          ...prev,
+          [msg.config_id]: [
+            ...(prev[msg.config_id] ?? []),
+            {
+              timestamp_ms: msg.timestamp_ms,
+              state: msg.state,
+              confidence: msg.confidence,
+              latency_ms: msg.latency_ms,
+            },
+          ],
+        }));
+        setTurnTiming((prev) => {
+          const existing = prev[msg.config_id] ?? { stageTotals: {}, count: 0 };
+          const stageTotals = { ...existing.stageTotals };
+          for (const st of msg.stage_times ?? []) {
+            stageTotals[st.name] = (stageTotals[st.name] ?? 0) + st.us;
+          }
+          return { ...prev, [msg.config_id]: { stageTotals, count: existing.count + 1 } };
+        });
+        break;
+
       case "done":
         recordingRef.current = false;
         setRecording(false);
@@ -398,6 +450,8 @@ function App() {
     setVadTiming({});
     setPreprocessedSamples({});
     setPreprocessedSpectrumData({});
+    setTurnResults({});
+    setTurnTiming({});
     setPlaybackSource("original");
     setTotalDurationMs(0);
     setSampleRate(null);
@@ -412,6 +466,7 @@ function App() {
     });
 
     socket.send({ type: "set_configs", configs });
+    socket.send({ type: "set_turn_configs", configs: turnConfigs });
     socket.send({
       type: "start_recording",
       device_index: parseInt(selectedDevice),
@@ -442,12 +497,15 @@ function App() {
     setVadTiming({});
     setPreprocessedSamples({});
     setPreprocessedSpectrumData({});
+    setTurnResults({});
+    setTurnTiming({});
     setPlaybackSource("original");
     setTotalDurationMs(0);
     setSampleRate(null);
     setViewport({ viewStartMs: 0, viewDurationMs: calculateViewDuration(containerWidth) });
 
     socket.send({ type: "set_configs", configs });
+    socket.send({ type: "set_turn_configs", configs: turnConfigs });
     socket.send({ type: "load_file", path, channel });
     setLoadingFile(true);
   };
@@ -611,13 +669,14 @@ function App() {
             )}
           </div>
 
-          {/* Hint when no configs exist */}
+            {/* Hint when no configs exist */}
           {configs.length === 0 && connected && (
             <span className="text-xs text-muted-foreground">
               Add a VAD config below to enable recording and file upload.
             </span>
           )}
         </div>
+
 
         {/* Playback controls (visible when audio exists and not recording) */}
         {!recording && !loadingFile && samples.length > 0 && (
@@ -747,9 +806,15 @@ function App() {
 
         {/* VAD Timelines */}
         {configs.length > 0 && (
-          <h3 className="text-sm font-medium pt-2">VAD Results</h3>
+          <button
+            className="flex items-center gap-1 text-sm font-medium pt-2 text-left w-full"
+            onClick={() => setVadOpen((v) => !v)}
+          >
+            <span className="text-muted-foreground text-xs">{vadOpen ? "▼" : "▶"}</span>
+            VAD Results
+          </button>
         )}
-        {configs.map((config, i) => {
+        {vadOpen && configs.map((config, i) => {
           const timing = vadTiming[config.id];
           const rtf = timing && timing.totalAudioMs > 0
             ? (timing.totalInferenceUs / 1000) / timing.totalAudioMs
@@ -783,8 +848,55 @@ function App() {
           );
         })}
 
+        {/* Turn Detection Timelines */}
+        {turnConfigs.length > 0 && (
+          <button
+            className="flex items-center gap-1 text-sm font-medium pt-2 text-left w-full"
+            onClick={() => setTurnOpen((v) => !v)}
+          >
+            <span className="text-muted-foreground text-xs">{turnOpen ? "▼" : "▶"}</span>
+            Turn Detection
+            <div className="flex gap-2 items-center ml-auto" onClick={(e) => e.stopPropagation()}>
+              {(["finished", "unfinished", "wait"] as const).map((state) => (
+                <span key={state} className="flex items-center gap-1">
+                  <span className="inline-block w-2 h-2 rounded-sm" style={{ background: TURN_STATE_COLORS[state] }} />
+                  <span className="text-xs text-muted-foreground font-mono">{state}</span>
+                </span>
+              ))}
+            </div>
+          </button>
+        )}
+        {turnOpen && turnConfigs.map((config) => {
+          const timing = turnTiming[config.id];
+          const stageAvgs = timing && timing.count > 0
+            ? Object.entries(timing.stageTotals).map(([name, totalUs]) => ({
+                name,
+                us: totalUs / timing.count,
+              }))
+            : undefined;
+          return (
+            <TurnTimeline
+              key={config.id}
+              configId={config.id}
+              label={config.label}
+              config={config}
+              results={turnResults[config.id] ?? []}
+              stageAvgs={stageAvgs}
+              totalDurationMs={totalDurationMs}
+              viewport={viewport}
+              width={containerWidth}
+              height={32}
+              className="border rounded"
+              hoverTimeMs={hoverTimeMs}
+              onHoverTimeChange={setHoverTimeMs}
+              recording={recording}
+              playheadMs={!recording && playback.canPlay ? playback.state.positionMs : null}
+            />
+          );
+        })}
+
         {/* Preprocessed Waveforms/Spectrograms/VAD - only for configs with showPreprocessed enabled */}
-        {configs.filter((c) => showPreprocessed[c.id]).map((config) => {
+        {vadOpen && configs.filter((c) => showPreprocessed[c.id]).map((config) => {
           const configIndex = configs.findIndex((c) => c.id === config.id);
           const color = COLORS[configIndex % COLORS.length];
           const configSamples = preprocessedSamples[config.id] ?? [];
@@ -875,18 +987,61 @@ function App() {
 
       <Separator />
 
-      {/* Config Panel */}
-      <ConfigPanel
-        configs={configs}
-        backends={backends}
-        preprocessingParams={preprocessingParams}
-        onConfigsChange={setConfigs}
-        onResetDefaults={() => setConfigs(createDefaultConfigs())}
-        showPreprocessed={showPreprocessed}
-        onShowPreprocessedChange={(configId, show) =>
-          setShowPreprocessed((prev) => ({ ...prev, [configId]: show }))
-        }
-      />
+      {/* VAD Config Panel */}
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <button
+            className="flex items-center gap-1 text-sm font-medium text-left"
+            onClick={() => setVadOpen((v) => !v)}
+          >
+            <span className="text-muted-foreground text-xs">{vadOpen ? "▼" : "▶"}</span>
+            VAD Configurations
+          </button>
+        </div>
+        {vadOpen && (
+          <ConfigPanel
+            configs={configs}
+            backends={backends}
+            preprocessingParams={preprocessingParams}
+            onConfigsChange={setConfigs}
+            onResetDefaults={() => setConfigs(createDefaultConfigs())}
+            showPreprocessed={showPreprocessed}
+            onShowPreprocessedChange={(configId, show) =>
+              setShowPreprocessed((prev) => ({ ...prev, [configId]: show }))
+            }
+          />
+        )}
+      </div>
+
+      {/* Turn Detection Config Panel */}
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <button
+            className="flex items-center gap-1 text-sm font-medium text-left"
+            onClick={() => setTurnOpen((v) => !v)}
+          >
+            <span className="text-muted-foreground text-xs">{turnOpen ? "▼" : "▶"}</span>
+            Turn Detection
+          </button>
+        </div>
+        {turnOpen && (
+          <TurnConfigPanel
+            configs={turnConfigs}
+            backends={turnBackends}
+            onConfigsChange={setTurnConfigs}
+            onResetDefaults={() => {
+              const backendNames = Object.keys(turnBackends);
+              if (backendNames.length === 0) return;
+              const backend = backendNames[0];
+              const params: Record<string, unknown> = {};
+              for (const p of turnBackends[backend]) {
+                params[p.name] = p.default;
+              }
+              setTurnConfigs([{ id: "turn-1", label: "turn-1", backend, params }]);
+            }}
+          />
+        )}
+      </div>
 
       <Separator />
 
