@@ -72,7 +72,7 @@ function downloadWav(samples: number[], sampleRate: number, filename: string) {
 }
 const MAX_RECORDING_DURATION_SECS = 120; // 2 minutes
 const MAX_UPLOAD_SIZE_MB = 100;
-const CONFIGS_STORAGE_KEY = "vad-lab-configs";
+const CONFIGS_STORAGE_KEY = "lab-configs";
 
 function loadSavedConfigs(): VadConfig[] | null {
   try {
@@ -509,7 +509,7 @@ function App() {
     <div className="min-h-screen bg-background p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div className="flex items-baseline gap-2">
-          <h1 className="text-xl font-bold">vad-lab</h1>
+          <h1 className="text-xl font-bold">wavekat-lab</h1>
           <span className="text-xs text-muted-foreground">by WaveKat</span>
         </div>
         <span className={`text-xs ${connectionColor[connectionState]}`}>
@@ -666,7 +666,7 @@ function App() {
                   const effectiveRate = playbackSampleRate ?? sampleRate;
                   const durationSecs = Math.round(playbackSamples.length / effectiveRate);
                   const timestamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
-                  downloadWav(playbackSamples, effectiveRate, `vad-lab_${safeName}_${durationSecs}s_${timestamp}.wav`);
+                  downloadWav(playbackSamples, effectiveRate, `lab_${safeName}_${durationSecs}s_${timestamp}.wav`);
                 }}
               >
                 Download WAV

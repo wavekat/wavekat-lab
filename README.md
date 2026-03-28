@@ -4,16 +4,18 @@
   </a>
 </p>
 
-Developer experimentation tools for the [WaveKat](https://github.com/wavekat) libraries.
+A web-based experimentation tool for testing and comparing [WaveKat](https://github.com/wavekat) library backends — VAD, turn detection, and more — side by side in real time.
 
 > [!WARNING]
-> Early development. Tools may change.
+> Early development. Things may change.
 
-## Tools
+## What It Does
 
-| Tool | Description |
-|------|-------------|
-| [vad-lab](tools/vad-lab/) | Web-based tool for testing and comparing VAD backends side by side |
+- **Live recording** — capture audio from your microphone server-side, stream results to the browser in real time
+- **File analysis** — upload a WAV file and run multiple configs against it at full speed
+- **Side-by-side comparison** — fan out audio to N configurations simultaneously and compare outputs
+- **Preprocessing exploration** — apply high-pass filters, RNNoise denoising, or normalization per-config
+- **Interactive visualization** — waveform, spectrogram, and probability timelines with synchronized zoom, pan, and hover
 
 ## Quick Start
 
@@ -24,11 +26,66 @@ make dev-frontend  # Terminal 1: frontend (http://localhost:5173)
 make dev-backend   # Terminal 2: backend with auto-rebuild (http://localhost:3000)
 ```
 
-See [tools/vad-lab/README.md](tools/vad-lab/README.md) for full usage and options.
+### CLI Options
 
-## Overview
+```
+--host <HOST>    Bind address (default: 127.0.0.1)
+--port <PORT>    Listen port (default: 3000)
+```
 
-wavekat-lab is a collection of developer tools for understanding and experimenting with WaveKat libraries before choosing backends or tuning parameters. These are not shipped products — they are dev tools.
+## Supported Backends
+
+### VAD
+
+| Backend | Description | Key Parameters |
+|---------|-------------|----------------|
+| **webrtc-vad** | Google's WebRTC VAD — fast, low latency | Mode: quality, low-bitrate, aggressive, very-aggressive |
+| **silero-vad** | Neural network VAD via ONNX Runtime — higher accuracy | Threshold: 0.0–1.0 |
+| **ten-vad** | TEN framework VAD | Threshold: 0.0–1.0 |
+| **firered-vad** | Xiaohongshu's FireRedVAD using DFSMN architecture | Threshold: 0.0–1.0 |
+
+Each config can also enable per-config preprocessing: high-pass filter, RNNoise denoising, normalization.
+
+### Turn Detection
+
+| Backend | Description | Input |
+|---------|-------------|-------|
+| **pipecat** | Pipecat Smart Turn v3 — audio-based EOU detection | 16 kHz PCM audio |
+| **livekit** | LiveKit Turn Detector — transcript-based EOU detection | ASR transcript text |
+
+## Architecture
+
+The Rust backend handles all audio capture and processing; the React frontend is embedded in the binary and handles visualization only.
+
+```
+┌─────────────────────────────────┐
+│  Browser (React)                │
+│  Waveform + Spectrogram +       │
+│  Timelines + Config Panel       │
+└──────────┬──────────────────────┘
+           │ WebSocket
+┌──────────▼──────────────────────┐
+│  Server (Rust / Axum)           │
+│  ┌────────────┐  ┌────────────┐ │
+│  │ Mic Capture │  │ WAV Loader │ │
+│  │   (cpal)    │  │  (hound)   │ │
+│  └─────┬──────┘  └─────┬──────┘ │
+│        └──────┬─────────┘        │
+│        ┌──────▼──────┐           │
+│        │ Audio Frames │          │
+│        └──────┬──────┘           │
+│     ┌─────────┼─────────┐       │
+│     ▼         ▼         ▼       │
+│  Config 1  Config 2  Config N   │
+│     │         │         │       │
+│     └─────────┼─────────┘       │
+│          ┌────▼────┐             │
+│          │ Results  │            │
+│          └────┬────┘             │
+└───────────────┼──────────────────┘
+                ▼
+           Browser UI
+```
 
 ## License
 

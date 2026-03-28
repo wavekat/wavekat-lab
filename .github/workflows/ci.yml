@@ -41,11 +41,11 @@ jobs:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v4
         with:
-          node-version-file: tools/vad-lab/frontend/.nvmrc
+          node-version-file: frontend/.nvmrc
           cache: npm
-          cache-dependency-path: tools/vad-lab/frontend/package-lock.json
+          cache-dependency-path: frontend/package-lock.json
       - run: npm ci
-        working-directory: tools/vad-lab/frontend
+        working-directory: frontend
       - run: make ci-frontend
       - name: Job summary
         if: always()
