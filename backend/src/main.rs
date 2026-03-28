@@ -16,7 +16,7 @@ use serde_json::json;
 use tower_http::cors::CorsLayer;
 
 #[derive(Parser)]
-#[command(name = "vad-lab", about = "VAD experimentation tool")]
+#[command(name = "lab", about = "WaveKat Lab experimentation tool")]
 struct Args {
     /// Port to listen on.
     #[arg(short, long, default_value = "3000")]
@@ -32,7 +32,7 @@ async fn main() {
     tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "vad_lab=info".into()),
+                .unwrap_or_else(|_| "lab=info".into()),
         )
         .init();
 
@@ -45,7 +45,7 @@ async fn main() {
         .layer(CorsLayer::permissive());
 
     let addr = format!("{}:{}", args.host, args.port);
-    tracing::info!("vad-lab server listening on http://{addr}");
+    tracing::info!("lab server listening on http://{addr}");
     tracing::info!("open http://{addr} in your browser");
 
     let listener = tokio::net::TcpListener::bind(&addr).await.unwrap_or_else(|e| {
@@ -89,7 +89,7 @@ async fn upload_handler(mut multipart: Multipart) -> Result<Json<serde_json::Val
     })?;
 
     // Save to temp directory with a unique name
-    let temp_dir = std::env::temp_dir().join("vad-lab-uploads");
+    let temp_dir = std::env::temp_dir().join("lab-uploads");
     std::fs::create_dir_all(&temp_dir).map_err(|e| {
         tracing::error!("failed to create temp dir: {e}");
         StatusCode::INTERNAL_SERVER_ERROR
@@ -120,10 +120,10 @@ async fn index_handler() -> Html<&'static str> {
     Html(
         r#"<!DOCTYPE html>
 <html>
-<head><title>vad-lab</title></head>
+<head><title>WaveKat Lab</title></head>
 <body>
-    <h1>vad-lab</h1>
-    <p>Frontend not yet built. Run <code>npm run dev</code> in <code>tools/vad-lab/frontend/</code> for the dev server.</p>
+    <h1>WaveKat Lab</h1>
+    <p>Frontend not yet built. Run <code>npm run dev</code> in <code>frontend/</code> for the dev server.</p>
     <p>WebSocket endpoint: <code>ws://localhost:3000/ws</code></p>
 </body>
 </html>"#,
