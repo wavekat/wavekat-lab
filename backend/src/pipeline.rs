@@ -352,10 +352,14 @@ pub fn run_turn_pipeline(
                                 state: state.to_string(),
                                 confidence: prediction.confidence,
                                 latency_ms: prediction.latency_ms,
-                                stage_times: prediction.stage_times.iter().map(|s| StageTiming {
-                                    name: s.name.to_string(),
-                                    us: s.us,
-                                }).collect(),
+                                stage_times: prediction
+                                    .stage_times
+                                    .iter()
+                                    .map(|s| StageTiming {
+                                        name: s.name.to_string(),
+                                        us: s.us,
+                                    })
+                                    .collect(),
                             };
                             if result_tx.send(result).await.is_err() {
                                 return;
@@ -398,10 +402,22 @@ pub fn available_turn_backends() -> HashMap<String, Vec<ParamInfo>> {
             name: "predict_interval_ms".to_string(),
             description: "Prediction interval".to_string(),
             param_type: ParamType::Select(vec![
-                SelectOption { value: "200".into(), label: "200 ms".into() },
-                SelectOption { value: "500".into(), label: "500 ms".into() },
-                SelectOption { value: "1000".into(), label: "1000 ms".into() },
-                SelectOption { value: "2000".into(), label: "2000 ms".into() },
+                SelectOption {
+                    value: "200".into(),
+                    label: "200 ms".into(),
+                },
+                SelectOption {
+                    value: "500".into(),
+                    label: "500 ms".into(),
+                },
+                SelectOption {
+                    value: "1000".into(),
+                    label: "1000 ms".into(),
+                },
+                SelectOption {
+                    value: "2000".into(),
+                    label: "2000 ms".into(),
+                },
             ]),
             default: serde_json::json!("500"),
         }],

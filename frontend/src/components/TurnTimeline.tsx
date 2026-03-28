@@ -3,6 +3,7 @@ import { Info } from "lucide-react";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { type Viewport, pixelToTime, timeToPixel } from "@/lib/viewport";
 import { type TurnConfig } from "@/lib/websocket";
+import { STATE_COLORS } from "@/lib/turnColors";
 
 export interface TurnResultPoint {
   timestamp_ms: number;
@@ -44,14 +45,7 @@ function formatTiming(us: number): string {
   return `${us < 10 ? us.toFixed(1) : Math.round(us)}µs`;
 }
 
-export const STATE_COLORS: Record<string, string> = {
-  finished: "#22c55e",
-  unfinished: "#6b7280",
-  wait: "#f59e0b",
-};
-
 export function TurnTimeline({
-  configId: _configId,
   label,
   config,
   results,

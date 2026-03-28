@@ -14,7 +14,8 @@ import { FrequencySpectrum } from "@/components/FrequencySpectrum";
 import { ConfigPanel } from "@/components/ConfigPanel";
 import { LogPanel } from "@/components/LogPanel";
 import { ZoomControls } from "@/components/ZoomControls";
-import { TurnTimeline, type TurnResultPoint, STATE_COLORS as TURN_STATE_COLORS } from "@/components/TurnTimeline";
+import { TurnTimeline, type TurnResultPoint } from "@/components/TurnTimeline";
+import { STATE_COLORS as TURN_STATE_COLORS } from "@/lib/turnColors";
 import { TurnConfigPanel } from "@/components/TurnConfigPanel";
 import {
   type Viewport,
