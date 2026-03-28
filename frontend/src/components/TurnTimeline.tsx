@@ -62,12 +62,16 @@ export function TurnTimeline({
 }: TurnTimelineProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
-  const effectiveViewport = recording
-    ? {
-        viewStartMs: totalDurationMs - viewport.viewDurationMs,
-        viewDurationMs: viewport.viewDurationMs,
-      }
-    : viewport;
+  const effectiveViewport = useMemo(
+    () =>
+      recording
+        ? {
+            viewStartMs: totalDurationMs - viewport.viewDurationMs,
+            viewDurationMs: viewport.viewDurationMs,
+          }
+        : viewport,
+    [recording, totalDurationMs, viewport]
+  );
 
   const handleMouseMove = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
