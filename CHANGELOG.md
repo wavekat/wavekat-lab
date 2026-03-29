@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.4](https://github.com/wavekat/wavekat-lab/compare/v0.0.3...v0.0.4) (2026-03-28)
+
+
+### Features
+
+* turn detection lab ([#8](https://github.com/wavekat/wavekat-lab/issues/8)) ([495499c](https://github.com/wavekat/wavekat-lab/commit/495499cbba126fc57a40999f95bb21a90786508c))
+
 ## [0.0.3](https://github.com/wavekat/wavekat-lab/compare/v0.0.2...v0.0.3) (2026-03-28)
 
 
