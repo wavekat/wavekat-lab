@@ -13,5 +13,26 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: googleapis/release-please-action@v4
+        id: release
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/checkout@v4
+        if: ${{ steps.release.outputs.pr }}
+        with:
+          ref: ${{ fromJSON(steps.release.outputs.pr).headBranchName }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update Cargo.lock
+        if: ${{ steps.release.outputs.pr }}
+        run: |
+          cargo generate-lockfile
+          if git diff --quiet Cargo.lock; then
+            echo "Cargo.lock is already up to date"
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git add Cargo.lock
+            git commit -m "chore: update Cargo.lock"
+            git push
+          fi
