@@ -42,6 +42,10 @@ pub enum ClientMessage {
     SetTurnConfigs {
         configs: Vec<pipeline::TurnConfig>,
     },
+    /// Set the active pipeline mode configs (replaces previous list).
+    SetPipelineConfigs {
+        configs: Vec<pipeline::PipelineConfig>,
+    },
 }
 
 /// Messages sent from the server to the client.
@@ -109,6 +113,16 @@ pub enum ServerMessage {
         /// Per-stage timing breakdown (e.g. audio_prep, mel, onnx).
         stage_times: Vec<pipeline::StageTiming>,
     },
+    /// Pipeline mode event (speech start/end with turn prediction).
+    Pipeline {
+        config_id: String,
+        timestamp_ms: f64,
+        /// "speech_start" or "speech_end"
+        event: String,
+        turn_state: Option<String>,
+        turn_confidence: Option<f32>,
+        turn_latency_ms: Option<u64>,
+    },
     Done,
     Error {
         message: String,
@@ -124,6 +138,7 @@ pub async fn handle_ws(socket: WebSocket) {
     let (mut ws_tx, mut ws_rx) = socket.split();
     let mut configs: Vec<VadConfig> = Vec::new();
     let mut turn_configs: Vec<pipeline::TurnConfig> = Vec::new();
+    let mut pipeline_configs: Vec<pipeline::PipelineConfig> = Vec::new();
     let mut stop_tx: Option<tokio::sync::oneshot::Sender<()>> = None;
     let mut spectrum_bins: usize = DEFAULT_OUTPUT_BINS;
 
@@ -187,6 +202,13 @@ pub async fn handle_ws(socket: WebSocket) {
                 turn_configs = new_turn_configs;
             }
 
+            ClientMessage::SetPipelineConfigs {
+                configs: new_pipeline_configs,
+            } => {
+                tracing::info!(count = new_pipeline_configs.len(), "pipeline configs updated");
+                pipeline_configs = new_pipeline_configs;
+            }
+
             ClientMessage::SetSpectrumBins { bins: new_bins } => {
                 // Validate bins (must be power of 2 and divide 512 evenly)
                 let valid_bins = [32, 64, 128, 256, 512];
@@ -229,15 +251,37 @@ pub async fn handle_ws(socket: WebSocket) {
                             }))
                             .await;
 
+                        // Create VAD probability broadcast for pipeline mode
+                        let (vad_broadcast_tx, _) =
+                            broadcast::channel::<pipeline::VadProbability>(4096);
+                        let vad_broadcast = if pipeline_configs.is_empty() {
+                            None
+                        } else {
+                            Some(&vad_broadcast_tx)
+                        };
+
                         // Start the pipeline (each config gets its own task)
                         let mut result_rx =
-                            pipeline::run_pipeline(&configs, &audio_tx, sample_rate);
+                            pipeline::run_pipeline(&configs, &audio_tx, sample_rate, vad_broadcast);
 
                         // Start the turn detection pipeline
                         let mut turn_rx = if !turn_configs.is_empty() {
                             Some(pipeline::run_turn_pipeline(
                                 &turn_configs,
                                 &audio_tx,
+                                sample_rate,
+                            ))
+                        } else {
+                            None
+                        };
+
+                        // Start pipeline mode (VAD-gated turn detection)
+                        let mut pipeline_mode_rx = if !pipeline_configs.is_empty() {
+                            Some(pipeline::run_pipeline_mode(
+                                &pipeline_configs,
+                                &turn_configs,
+                                &audio_tx,
+                                &vad_broadcast_tx,
                                 sample_rate,
                             ))
                         } else {
@@ -289,6 +333,42 @@ pub async fn handle_ws(socket: WebSocket) {
                                         stage_times: result.stage_times,
                                     };
                                     if msg_tx_turn.send(turn_msg).await.is_err() {
+                                        break;
+                                    }
+                                }
+                            });
+                        }
+
+                        // Forward pipeline mode results
+                        if let Some(mut pipeline_mode_rx) = pipeline_mode_rx.take() {
+                            let msg_tx_pipeline = msg_tx.clone();
+                            tokio::spawn(async move {
+                                while let Some(result) = pipeline_mode_rx.recv().await {
+                                    let (event, turn_state, turn_confidence, turn_latency_ms) =
+                                        match &result.event {
+                                            pipeline::PipelineModeEvent::SpeechStart => {
+                                                ("speech_start".to_string(), None, None, None)
+                                            }
+                                            pipeline::PipelineModeEvent::SpeechEnd {
+                                                turn_state,
+                                                turn_confidence,
+                                                turn_latency_ms,
+                                            } => (
+                                                "speech_end".to_string(),
+                                                Some(turn_state.clone()),
+                                                Some(*turn_confidence),
+                                                Some(*turn_latency_ms),
+                                            ),
+                                        };
+                                    let msg = ServerMessage::Pipeline {
+                                        config_id: result.config_id,
+                                        timestamp_ms: result.timestamp_ms,
+                                        event,
+                                        turn_state,
+                                        turn_confidence,
+                                        turn_latency_ms,
+                                    };
+                                    if msg_tx_pipeline.send(msg).await.is_err() {
                                         break;
                                     }
                                 }
@@ -430,14 +510,37 @@ pub async fn handle_ws(socket: WebSocket) {
                 let total_frames = loaded.samples.len() / samples_per_frame.max(1) + 16;
                 let (audio_tx, _) = broadcast::channel::<AudioFrame>(total_frames.max(16));
 
+                // Create VAD probability broadcast for pipeline mode
+                let (vad_broadcast_tx, _) =
+                    broadcast::channel::<pipeline::VadProbability>(4096);
+                let vad_broadcast = if pipeline_configs.is_empty() {
+                    None
+                } else {
+                    Some(&vad_broadcast_tx)
+                };
+
                 // Start pipeline BEFORE emitting frames so it receives everything
-                let result_rx = pipeline::run_pipeline(&configs, &audio_tx, sample_rate);
+                let result_rx =
+                    pipeline::run_pipeline(&configs, &audio_tx, sample_rate, vad_broadcast);
 
                 // Start turn detection BEFORE emitting frames
                 let turn_rx = if !turn_configs.is_empty() {
                     Some(pipeline::run_turn_pipeline(
                         &turn_configs,
                         &audio_tx,
+                        sample_rate,
+                    ))
+                } else {
+                    None
+                };
+
+                // Start pipeline mode BEFORE emitting frames
+                let pipeline_mode_rx = if !pipeline_configs.is_empty() {
+                    Some(pipeline::run_pipeline_mode(
+                        &pipeline_configs,
+                        &turn_configs,
+                        &audio_tx,
+                        &vad_broadcast_tx,
                         sample_rate,
                     ))
                 } else {
@@ -512,7 +615,43 @@ pub async fn handle_ws(socket: WebSocket) {
                     });
                 }
 
-                // Task 3: Forward VAD + preprocessed results
+                // Task 3: Forward pipeline mode results
+                if let Some(mut pipeline_mode_rx) = pipeline_mode_rx {
+                    let msg_tx_pipeline = msg_tx.clone();
+                    tokio::spawn(async move {
+                        while let Some(result) = pipeline_mode_rx.recv().await {
+                            let (event, turn_state, turn_confidence, turn_latency_ms) =
+                                match &result.event {
+                                    pipeline::PipelineModeEvent::SpeechStart => {
+                                        ("speech_start".to_string(), None, None, None)
+                                    }
+                                    pipeline::PipelineModeEvent::SpeechEnd {
+                                        turn_state,
+                                        turn_confidence,
+                                        turn_latency_ms,
+                                    } => (
+                                        "speech_end".to_string(),
+                                        Some(turn_state.clone()),
+                                        Some(*turn_confidence),
+                                        Some(*turn_latency_ms),
+                                    ),
+                                };
+                            let msg = ServerMessage::Pipeline {
+                                config_id: result.config_id,
+                                timestamp_ms: result.timestamp_ms,
+                                event,
+                                turn_state,
+                                turn_confidence,
+                                turn_latency_ms,
+                            };
+                            if msg_tx_pipeline.send(msg).await.is_err() {
+                                break;
+                            }
+                        }
+                    });
+                }
+
+                // Task 4: Forward VAD + preprocessed results
                 let msg_tx_vad = msg_tx;
                 let vad_bins = spectrum_bins;
                 let mut result_rx = result_rx;

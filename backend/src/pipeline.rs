@@ -78,6 +78,7 @@ pub fn run_pipeline(
     configs: &[VadConfig],
     audio_tx: &broadcast::Sender<AudioFrame>,
     sample_rate: u32,
+    vad_broadcast: Option<&broadcast::Sender<VadProbability>>,
 ) -> mpsc::Receiver<PipelineResult> {
     let (result_tx, result_rx) = mpsc::channel::<PipelineResult>(1024);
 
@@ -117,6 +118,7 @@ pub fn run_pipeline(
         let frame_duration_ms = adapter.capabilities().frame_duration_ms;
         let mut audio_rx = audio_tx.subscribe();
         let result_tx = result_tx.clone();
+        let vad_broadcast = vad_broadcast.cloned();
 
         tokio::spawn(async move {
             while let Ok(frame) = audio_rx.recv().await {
@@ -145,6 +147,13 @@ pub fn run_pipeline(
                         let per_frame_stages =
                             stage_deltas(&timings_before, &adapter.timings(), probabilities.len());
                         for probability in probabilities {
+                            if let Some(ref vad_broadcast) = vad_broadcast {
+                                let _ = vad_broadcast.send(VadProbability {
+                                    config_id: config_id.clone(),
+                                    timestamp_ms: frame.timestamp_ms,
+                                    probability,
+                                });
+                            }
                             let result = PipelineResult {
                                 config_id: config_id.clone(),
                                 timestamp_ms: frame.timestamp_ms,
@@ -272,6 +281,52 @@ pub struct TurnConfig {
     pub params: HashMap<String, serde_json::Value>,
 }
 
+/// Configuration for a VAD-gated turn detection pipeline.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PipelineConfig {
+    /// Unique identifier for this config.
+    pub id: String,
+    /// Human-readable label.
+    pub label: String,
+    /// References an existing VadConfig by id.
+    pub vad_config_id: String,
+    /// References an existing TurnConfig by id.
+    pub turn_config_id: String,
+    /// VAD probability below this = speech ended.
+    pub speech_end_threshold: f32,
+    /// VAD probability above this = speech started.
+    pub speech_start_threshold: f32,
+    /// Silence must hold for this long before firing (ms).
+    pub min_silence_ms: u32,
+}
+
+/// Lightweight VAD probability event for broadcasting to pipeline mode runners.
+#[derive(Debug, Clone)]
+pub struct VadProbability {
+    pub config_id: String,
+    pub timestamp_ms: f64,
+    pub probability: f32,
+}
+
+/// A pipeline mode event.
+#[derive(Debug, Clone)]
+pub enum PipelineModeEvent {
+    SpeechStart,
+    SpeechEnd {
+        turn_state: String,
+        turn_confidence: f32,
+        turn_latency_ms: u64,
+    },
+}
+
+/// A pipeline mode result.
+#[derive(Debug, Clone)]
+pub struct PipelineModeResult {
+    pub config_id: String,
+    pub timestamp_ms: f64,
+    pub event: PipelineModeEvent,
+}
+
 /// A turn detection result.
 #[derive(Debug, Clone, Serialize)]
 pub struct TurnResult {
@@ -390,6 +445,149 @@ fn create_turn_detector(config: &TurnConfig) -> Result<Box<dyn AudioTurnDetector
         }
         other => Err(format!("unknown turn backend: {other}")),
     }
+}
+
+/// Run the pipeline mode: VAD-gated turn detection.
+///
+/// For each `PipelineConfig`, spawns a task that subscribes to both the audio
+/// broadcast and the VAD probability broadcast. When VAD probability crosses
+/// the speech start threshold, audio frames are fed to a fresh turn detector.
+/// When silence holds for `min_silence_ms`, a turn prediction is made.
+pub fn run_pipeline_mode(
+    pipeline_configs: &[PipelineConfig],
+    turn_configs: &[TurnConfig],
+    audio_tx: &broadcast::Sender<AudioFrame>,
+    vad_broadcast: &broadcast::Sender<VadProbability>,
+    sample_rate: u32,
+) -> mpsc::Receiver<PipelineModeResult> {
+    let (result_tx, result_rx) = mpsc::channel::<PipelineModeResult>(256);
+
+    for pipeline_config in pipeline_configs {
+        // Find the referenced turn config
+        let turn_config = match turn_configs
+            .iter()
+            .find(|c| c.id == pipeline_config.turn_config_id)
+        {
+            Some(c) => c.clone(),
+            None => {
+                tracing::warn!(
+                    pipeline_id = %pipeline_config.id,
+                    turn_config_id = %pipeline_config.turn_config_id,
+                    "pipeline references nonexistent turn config, skipping"
+                );
+                continue;
+            }
+        };
+
+        // Create the turn detector eagerly (avoids blocking inside async task)
+        let mut detector = match create_turn_detector(&turn_config) {
+            Ok(d) => d,
+            Err(e) => {
+                tracing::error!(
+                    pipeline_id = %pipeline_config.id,
+                    "failed to create turn detector for pipeline: {e}"
+                );
+                continue;
+            }
+        };
+
+        let config = pipeline_config.clone();
+        let mut audio_rx = audio_tx.subscribe();
+        let mut vad_rx = vad_broadcast.subscribe();
+        let result_tx = result_tx.clone();
+
+        tokio::spawn(async move {
+            let mut speech_started = false;
+            let mut silence_start_ms: Option<f64> = None;
+
+            loop {
+                tokio::select! {
+                    Ok(frame) = audio_rx.recv() => {
+                        if speech_started {
+                            let samples = if sample_rate != 16000 {
+                                resample_linear(&frame.samples, sample_rate, 16000)
+                            } else {
+                                frame.samples.clone()
+                            };
+                            let turn_frame = TurnAudioFrame::new(&samples, 16000);
+                            detector.push_audio(&turn_frame);
+                        }
+                    }
+                    Ok(vad) = vad_rx.recv() => {
+                        if vad.config_id != config.vad_config_id {
+                            continue;
+                        }
+
+                        if !speech_started && vad.probability > config.speech_start_threshold {
+                            // Speech start
+                            speech_started = true;
+                            silence_start_ms = None;
+
+                            let result = PipelineModeResult {
+                                config_id: config.id.clone(),
+                                timestamp_ms: vad.timestamp_ms,
+                                event: PipelineModeEvent::SpeechStart,
+                            };
+                            if result_tx.send(result).await.is_err() {
+                                return;
+                            }
+                        } else if speech_started && vad.probability < config.speech_end_threshold {
+                            // Below end threshold — track silence duration
+                            if silence_start_ms.is_none() {
+                                silence_start_ms = Some(vad.timestamp_ms);
+                            }
+
+                            if let Some(start) = silence_start_ms {
+                                if vad.timestamp_ms - start >= config.min_silence_ms as f64 {
+                                    // Silence held long enough — predict and emit speech end
+                                    let (state, confidence, latency) = match detector.predict() {
+                                        Ok(pred) => {
+                                            let state = match pred.state {
+                                                TurnState::Finished => "finished",
+                                                TurnState::Unfinished => "unfinished",
+                                                TurnState::Wait => "wait",
+                                            };
+                                            (state.to_string(), pred.confidence, pred.latency_ms)
+                                        }
+                                        Err(e) => {
+                                            tracing::warn!(
+                                                pipeline_id = %config.id,
+                                                "turn prediction error: {e}"
+                                            );
+                                            ("error".to_string(), 0.0, 0)
+                                        }
+                                    };
+
+                                    let result = PipelineModeResult {
+                                        config_id: config.id.clone(),
+                                        timestamp_ms: vad.timestamp_ms,
+                                        event: PipelineModeEvent::SpeechEnd {
+                                            turn_state: state,
+                                            turn_confidence: confidence,
+                                            turn_latency_ms: latency,
+                                        },
+                                    };
+                                    if result_tx.send(result).await.is_err() {
+                                        return;
+                                    }
+
+                                    speech_started = false;
+                                    silence_start_ms = None;
+                                }
+                            }
+                        } else if speech_started {
+                            // Probability went back above end threshold — reset silence
+                            silence_start_ms = None;
+                        }
+                    }
+                    else => break,
+                }
+            }
+        });
+    }
+
+    drop(result_tx);
+    result_rx
 }
 
 /// Return the list of available turn detection backends and their parameters.
