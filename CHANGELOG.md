@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.5](https://github.com/wavekat/wavekat-lab/compare/v0.0.4...v0.0.5) (2026-03-29)
+
+
+### Features
+
+* VAD-gated pipeline mode ([#10](https://github.com/wavekat/wavekat-lab/issues/10)) ([4aaf8f4](https://github.com/wavekat/wavekat-lab/commit/4aaf8f4320825c2b1f40f414bf5c09c77f438430))
+
 ## [0.0.4](https://github.com/wavekat/wavekat-lab/compare/v0.0.3...v0.0.4) (2026-03-28)
 
 
