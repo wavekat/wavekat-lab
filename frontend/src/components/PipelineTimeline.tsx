@@ -1,5 +1,6 @@
-import { useRef, useEffect, useCallback, useMemo } from "react";
-import { type Viewport, pixelToTime, timeToPixel } from "@/lib/viewport";
+import { useRef, useEffect, useMemo } from "react";
+import { type Viewport, timeToPixel } from "@/lib/viewport";
+import { useTimelineDrag } from "@/lib/useTimelineDrag";
 import { STATE_COLORS } from "@/lib/turnColors";
 import type { PipelineResultPoint, PipelineConfig } from "@/lib/websocket";
 
@@ -26,6 +27,7 @@ interface PipelineTimelineProps {
   className?: string;
   hoverTimeMs?: number | null;
   onHoverTimeChange?: (timeMs: number | null) => void;
+  onViewportChange?: (v: Viewport) => void;
   recording?: boolean;
   playheadMs?: number | null;
 }
@@ -49,6 +51,7 @@ export function PipelineTimeline({
   className,
   hoverTimeMs,
   onHoverTimeChange,
+  onViewportChange,
   recording = false,
   playheadMs,
 }: PipelineTimelineProps) {
@@ -64,6 +67,9 @@ export function PipelineTimeline({
         : viewport,
     [recording, totalDurationMs, viewport]
   );
+
+  const { isDragging, handleMouseDown, handleMouseMove, handleMouseUp, handleMouseLeave, cursor } =
+    useTimelineDrag({ viewport, effectiveViewport, width, totalDurationMs, recording, onViewportChange, onHoverTimeChange });
 
   // Build speech segments from flat event list
   const segments = useMemo(() => {
@@ -92,21 +98,6 @@ export function PipelineTimeline({
 
     return segs;
   }, [results]);
-
-  const handleMouseMove = useCallback(
-    (e: React.MouseEvent<HTMLDivElement>) => {
-      if (!onHoverTimeChange) return;
-      const rect = e.currentTarget.getBoundingClientRect();
-      const x = e.clientX - rect.left;
-      const timeMs = pixelToTime(x, width, effectiveViewport);
-      onHoverTimeChange(Math.max(0, Math.min(totalDurationMs, timeMs)));
-    },
-    [onHoverTimeChange, totalDurationMs, width, effectiveViewport]
-  );
-
-  const handleMouseLeave = useCallback(() => {
-    onHoverTimeChange?.(null);
-  }, [onHoverTimeChange]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -261,9 +252,11 @@ export function PipelineTimeline({
       {/* Canvas */}
       <div
         className={`relative ${className ?? ""}`}
+        onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
         onMouseLeave={handleMouseLeave}
-        style={{ width, height }}
+        style={{ width, height, cursor }}
       >
         <canvas
           ref={canvasRef}

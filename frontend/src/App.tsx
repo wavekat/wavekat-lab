@@ -875,6 +875,7 @@ function App() {
             frameDurationMs={timing?.frameDurationMs}
             totalDurationMs={totalDurationMs}
             viewport={viewport}
+            onViewportChange={setViewport}
             width={containerWidth}
             height={32}
             color={COLORS[i % COLORS.length]}
@@ -922,6 +923,7 @@ function App() {
               stageAvgs={stageAvgs}
               totalDurationMs={totalDurationMs}
               viewport={viewport}
+              onViewportChange={setViewport}
               width={containerWidth}
               height={32}
               className="border rounded"
@@ -961,6 +963,7 @@ function App() {
             results={pipelineResults[config.id] ?? []}
             totalDurationMs={totalDurationMs}
             viewport={viewport}
+            onViewportChange={setViewport}
             width={containerWidth}
             height={48}
             className="border rounded"
@@ -1048,6 +1051,7 @@ function App() {
                 results={vadResults[config.id] ?? []}
                 totalDurationMs={totalDurationMs}
                 viewport={viewport}
+                onViewportChange={setViewport}
                 width={containerWidth}
                 height={32}
                 color={color}

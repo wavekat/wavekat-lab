@@ -1,7 +1,8 @@
-import { useRef, useEffect, useCallback, useMemo } from "react";
+import { useRef, useEffect, useMemo } from "react";
 import { Info } from "lucide-react";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
-import { type Viewport, pixelToTime, timeToPixel } from "@/lib/viewport";
+import { type Viewport, timeToPixel } from "@/lib/viewport";
+import { useTimelineDrag } from "@/lib/useTimelineDrag";
 import { type TurnConfig } from "@/lib/websocket";
 import { STATE_COLORS } from "@/lib/turnColors";
 
@@ -26,6 +27,7 @@ interface TurnTimelineProps {
   className?: string;
   hoverTimeMs?: number | null;
   onHoverTimeChange?: (timeMs: number | null) => void;
+  onViewportChange?: (v: Viewport) => void;
   recording?: boolean;
   playheadMs?: number | null;
 }
@@ -57,6 +59,7 @@ export function TurnTimeline({
   className,
   hoverTimeMs,
   onHoverTimeChange,
+  onViewportChange,
   recording = false,
   playheadMs,
 }: TurnTimelineProps) {
@@ -73,20 +76,8 @@ export function TurnTimeline({
     [recording, totalDurationMs, viewport]
   );
 
-  const handleMouseMove = useCallback(
-    (e: React.MouseEvent<HTMLDivElement>) => {
-      if (!onHoverTimeChange) return;
-      const rect = e.currentTarget.getBoundingClientRect();
-      const x = e.clientX - rect.left;
-      const timeMs = pixelToTime(x, width, effectiveViewport);
-      onHoverTimeChange(Math.max(0, Math.min(totalDurationMs, timeMs)));
-    },
-    [onHoverTimeChange, totalDurationMs, width, effectiveViewport]
-  );
-
-  const handleMouseLeave = useCallback(() => {
-    onHoverTimeChange?.(null);
-  }, [onHoverTimeChange]);
+  const { isDragging, handleMouseDown, handleMouseMove, handleMouseUp, handleMouseLeave, cursor } =
+    useTimelineDrag({ viewport, effectiveViewport, width, totalDurationMs, recording, onViewportChange, onHoverTimeChange });
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -251,9 +242,11 @@ export function TurnTimeline({
       {/* Canvas */}
       <div
         className={`relative ${className ?? ""}`}
+        onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
         onMouseLeave={handleMouseLeave}
-        style={{ width, height }}
+        style={{ width, height, cursor }}
       >
         <canvas
           ref={canvasRef}

@@ -1,7 +1,8 @@
-import { useRef, useEffect, useCallback } from "react";
+import { useRef, useEffect, useMemo } from "react";
 import { Info } from "lucide-react";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
-import { type Viewport, pixelToTime, timeToPixel } from "@/lib/viewport";
+import { type Viewport, timeToPixel } from "@/lib/viewport";
+import { useTimelineDrag } from "@/lib/useTimelineDrag";
 
 interface VadConfig {
   backend: string;
@@ -32,6 +33,7 @@ interface VadTimelineProps {
   className?: string;
   hoverTimeMs?: number | null;
   onHoverTimeChange?: (timeMs: number | null) => void;
+  onViewportChange?: (v: Viewport) => void;
   /** When true, "now" is anchored to right edge */
   recording?: boolean;
   /** Current playhead position in milliseconds (for playback) */
@@ -75,33 +77,26 @@ export function VadTimeline({
   className,
   hoverTimeMs,
   onHoverTimeChange,
+  onViewportChange,
   recording = false,
   playheadMs,
 }: VadTimelineProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   // During recording, anchor "now" to the right edge
-  const effectiveViewport = recording
-    ? {
-        viewStartMs: totalDurationMs - viewport.viewDurationMs,
-        viewDurationMs: viewport.viewDurationMs,
-      }
-    : viewport;
-
-  const handleMouseMove = useCallback(
-    (e: React.MouseEvent<HTMLDivElement>) => {
-      if (!onHoverTimeChange) return;
-      const rect = e.currentTarget.getBoundingClientRect();
-      const x = e.clientX - rect.left;
-      const timeMs = pixelToTime(x, width, effectiveViewport);
-      onHoverTimeChange(Math.max(0, Math.min(totalDurationMs, timeMs)));
-    },
-    [onHoverTimeChange, totalDurationMs, width, effectiveViewport]
+  const effectiveViewport = useMemo(
+    () =>
+      recording
+        ? {
+            viewStartMs: totalDurationMs - viewport.viewDurationMs,
+            viewDurationMs: viewport.viewDurationMs,
+          }
+        : viewport,
+    [recording, totalDurationMs, viewport],
   );
 
-  const handleMouseLeave = useCallback(() => {
-    onHoverTimeChange?.(null);
-  }, [onHoverTimeChange]);
+  const { isDragging, handleMouseDown, handleMouseMove, handleMouseUp, handleMouseLeave, cursor } =
+    useTimelineDrag({ viewport, effectiveViewport, width, totalDurationMs, recording, onViewportChange, onHoverTimeChange });
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -331,9 +326,11 @@ export function VadTimeline({
       </div>
       <div
         className="border rounded"
+        onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
         onMouseLeave={handleMouseLeave}
-        style={{ width, height, cursor: "crosshair" }}
+        style={{ width, height, cursor }}
       >
         <canvas ref={canvasRef} style={{ width, height }} />
       </div>
