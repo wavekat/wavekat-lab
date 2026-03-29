@@ -4,8 +4,15 @@ version = "0.0.4" # x-release-please-version
 edition = "2021"
 
 [dependencies]
-wavekat-vad = { version = "0.1", features = ["webrtc", "silero", "denoise", "ten-vad", "firered", "serde"] }
-wavekat-turn = { version = "0.0.3", features = ["pipecat"] }
+wavekat-vad = { version = "0.1", features = [
+    "webrtc",
+    "silero",
+    "denoise",
+    "ten-vad",
+    "firered",
+    "serde",
+] }
+wavekat-turn = { version = "0.0.4", features = ["pipecat"] }
 axum = { version = "0.8", features = ["ws", "multipart"] }
 tokio = { workspace = true }
 tower-http = { version = "0.6", features = ["cors", "fs"] }

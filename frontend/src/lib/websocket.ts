@@ -24,6 +24,24 @@ export interface TurnConfig {
   params: Record<string, unknown>;
 }
 
+export interface PipelineConfig {
+  id: string;
+  label: string;
+  vad_config_id: string;
+  turn_config_id: string;
+  speech_end_threshold: number;
+  speech_start_threshold: number;
+  min_silence_ms: number;
+}
+
+export interface PipelineResultPoint {
+  timestamp_ms: number;
+  event: string;
+  turn_state?: string;
+  turn_confidence?: number;
+  turn_latency_ms?: number;
+}
+
 export interface ParamInfo {
   name: string;
   description: string;
@@ -43,6 +61,7 @@ export type ServerMessage =
   | { type: "vad"; config_id: string; timestamp_ms: number; probability: number; inference_us: number; stage_times: Array<{ name: string; us: number }>; frame_duration_ms: number }
   | { type: "turn_backends"; backends: Record<string, ParamInfo[]> }
   | { type: "turn"; config_id: string; timestamp_ms: number; state: string; confidence: number; latency_ms: number; stage_times: Array<{ name: string; us: number }> }
+  | { type: "pipeline"; config_id: string; timestamp_ms: number; event: string; turn_state?: string; turn_confidence?: number; turn_latency_ms?: number }
   | { type: "done" }
   | { type: "error"; message: string };
 
@@ -56,7 +75,8 @@ export type ClientMessage =
   | { type: "set_configs"; configs: VadConfig[] }
   | { type: "set_spectrum_bins"; bins: number }
   | { type: "list_turn_backends" }
-  | { type: "set_turn_configs"; configs: TurnConfig[] };
+  | { type: "set_turn_configs"; configs: TurnConfig[] }
+  | { type: "set_pipeline_configs"; configs: PipelineConfig[] };
 
 export type MessageHandler = (msg: ServerMessage) => void;
 
@@ -359,6 +379,7 @@ function summarizeServer(msg: ServerMessage): string {
     case "vad": return `vad [${msg.config_id}] t=${msg.timestamp_ms.toFixed(0)}ms p=${msg.probability.toFixed(2)}`;
     case "turn_backends": return `turn_backends (${Object.keys(msg.backends).length})`;
     case "turn": return `turn [${msg.config_id}] t=${msg.timestamp_ms.toFixed(0)}ms state=${msg.state} conf=${msg.confidence.toFixed(2)} lat=${msg.latency_ms}ms`;
+    case "pipeline": return `pipeline [${msg.config_id}] t=${msg.timestamp_ms.toFixed(0)}ms ${msg.event}${msg.turn_state ? ` ${msg.turn_state} ${((msg.turn_confidence ?? 0) * 100).toFixed(0)}%` : ""}`;
     case "done": return "done";
     case "error": return `error: ${msg.message}`;
   }
@@ -375,5 +396,6 @@ function summarizeClient(msg: ClientMessage): string {
     case "set_spectrum_bins": return `set_spectrum_bins (${msg.bins})`;
     case "list_turn_backends": return "list_turn_backends";
     case "set_turn_configs": return `set_turn_configs (${msg.configs.length})`;
+    case "set_pipeline_configs": return `set_pipeline_configs (${msg.configs.length})`;
   }
 }

@@ -17,6 +17,8 @@ import { ZoomControls } from "@/components/ZoomControls";
 import { TurnTimeline, type TurnResultPoint } from "@/components/TurnTimeline";
 import { STATE_COLORS as TURN_STATE_COLORS } from "@/lib/turnColors";
 import { TurnConfigPanel } from "@/components/TurnConfigPanel";
+import { PipelineConfigPanel } from "@/components/PipelineConfigPanel";
+import { PipelineTimeline } from "@/components/PipelineTimeline";
 import {
   type Viewport,
   createDefaultViewport,
@@ -28,6 +30,8 @@ import {
   type AudioDevice,
   type VadConfig,
   type TurnConfig,
+  type PipelineConfig,
+  type PipelineResultPoint,
   type ParamInfo,
   type ServerMessage,
   type ConnectionState,
@@ -178,6 +182,15 @@ function App() {
   >({});
   const [vadOpen, setVadOpen] = useState(true);
   const [turnOpen, setTurnOpen] = useState(true);
+  const [pipelineOpen, setPipelineOpen] = useState(true);
+  const [pipelineConfigs, setPipelineConfigs] = useState<PipelineConfig[]>(() => {
+    try {
+      const saved = localStorage.getItem("lab-pipeline-configs");
+      if (saved !== null) return JSON.parse(saved) as PipelineConfig[];
+    } catch { /* ignore */ }
+    return [];
+  });
+  const [pipelineResults, setPipelineResults] = useState<Record<string, PipelineResultPoint[]>>({});
 
   // Preprocessed data per config
   const [preprocessedSamples, setPreprocessedSamples] = useState<Record<string, number[]>>({});
@@ -198,6 +211,11 @@ function App() {
       localStorage.setItem(CONFIGS_STORAGE_KEY, JSON.stringify(configs));
     }
   }, [configs]);
+
+  // Persist pipeline configs to localStorage
+  useEffect(() => {
+    localStorage.setItem("lab-pipeline-configs", JSON.stringify(pipelineConfigs));
+  }, [pipelineConfigs]);
 
   // Resolve playback samples based on selected source
   const playbackSamples =
@@ -398,6 +416,22 @@ function App() {
         });
         break;
 
+      case "pipeline":
+        setPipelineResults((prev) => ({
+          ...prev,
+          [msg.config_id]: [
+            ...(prev[msg.config_id] ?? []),
+            {
+              timestamp_ms: msg.timestamp_ms,
+              event: msg.event,
+              turn_state: msg.turn_state,
+              turn_confidence: msg.turn_confidence,
+              turn_latency_ms: msg.turn_latency_ms,
+            },
+          ],
+        }));
+        break;
+
       case "done":
         recordingRef.current = false;
         setRecording(false);
@@ -452,6 +486,7 @@ function App() {
     setPreprocessedSpectrumData({});
     setTurnResults({});
     setTurnTiming({});
+    setPipelineResults({});
     setPlaybackSource("original");
     setTotalDurationMs(0);
     setSampleRate(null);
@@ -467,6 +502,7 @@ function App() {
 
     socket.send({ type: "set_configs", configs });
     socket.send({ type: "set_turn_configs", configs: turnConfigs });
+    socket.send({ type: "set_pipeline_configs", configs: pipelineConfigs });
     socket.send({
       type: "start_recording",
       device_index: parseInt(selectedDevice),
@@ -499,6 +535,7 @@ function App() {
     setPreprocessedSpectrumData({});
     setTurnResults({});
     setTurnTiming({});
+    setPipelineResults({});
     setPlaybackSource("original");
     setTotalDurationMs(0);
     setSampleRate(null);
@@ -506,6 +543,7 @@ function App() {
 
     socket.send({ type: "set_configs", configs });
     socket.send({ type: "set_turn_configs", configs: turnConfigs });
+    socket.send({ type: "set_pipeline_configs", configs: pipelineConfigs });
     socket.send({ type: "load_file", path, channel });
     setLoadingFile(true);
   };
@@ -837,6 +875,7 @@ function App() {
             frameDurationMs={timing?.frameDurationMs}
             totalDurationMs={totalDurationMs}
             viewport={viewport}
+            onViewportChange={setViewport}
             width={containerWidth}
             height={32}
             color={COLORS[i % COLORS.length]}
@@ -884,6 +923,7 @@ function App() {
               stageAvgs={stageAvgs}
               totalDurationMs={totalDurationMs}
               viewport={viewport}
+              onViewportChange={setViewport}
               width={containerWidth}
               height={32}
               className="border rounded"
@@ -894,6 +934,45 @@ function App() {
             />
           );
         })}
+
+        {/* Pipeline Mode Timelines */}
+        {pipelineConfigs.length > 0 && (
+          <button
+            className="flex items-center gap-1 text-sm font-medium pt-2 text-left w-full"
+            onClick={() => setPipelineOpen((v) => !v)}
+          >
+            <span className="text-muted-foreground text-xs">{pipelineOpen ? "\u25BC" : "\u25B6"}</span>
+            Pipeline Mode
+            <div className="flex gap-2 items-center ml-auto" onClick={(e) => e.stopPropagation()}>
+              {(["finished", "unfinished", "wait"] as const).map((state) => (
+                <span key={state} className="flex items-center gap-1">
+                  <span className="inline-block w-2 h-2 rounded-sm" style={{ background: TURN_STATE_COLORS[state] }} />
+                  <span className="text-xs text-muted-foreground font-mono">{state}</span>
+                </span>
+              ))}
+            </div>
+          </button>
+        )}
+        {pipelineOpen && pipelineConfigs.map((config) => (
+          <PipelineTimeline
+            key={config.id}
+            label={config.label}
+            config={config}
+            vadLabel={configs.find((c) => c.id === config.vad_config_id)?.label}
+            turnLabel={turnConfigs.find((c) => c.id === config.turn_config_id)?.label}
+            results={pipelineResults[config.id] ?? []}
+            totalDurationMs={totalDurationMs}
+            viewport={viewport}
+            onViewportChange={setViewport}
+            width={containerWidth}
+            height={48}
+            className="border rounded"
+            hoverTimeMs={hoverTimeMs}
+            onHoverTimeChange={setHoverTimeMs}
+            recording={recording}
+            playheadMs={!recording && playback.canPlay ? playback.state.positionMs : null}
+          />
+        ))}
 
         {/* Preprocessed Waveforms/Spectrograms/VAD - only for configs with showPreprocessed enabled */}
         {vadOpen && configs.filter((c) => showPreprocessed[c.id]).map((config) => {
@@ -972,6 +1051,7 @@ function App() {
                 results={vadResults[config.id] ?? []}
                 totalDurationMs={totalDurationMs}
                 viewport={viewport}
+                onViewportChange={setViewport}
                 width={containerWidth}
                 height={32}
                 color={color}
@@ -1020,7 +1100,7 @@ function App() {
             className="flex items-center gap-1 text-sm font-medium text-left"
             onClick={() => setTurnOpen((v) => !v)}
           >
-            <span className="text-muted-foreground text-xs">{turnOpen ? "▼" : "▶"}</span>
+            <span className="text-muted-foreground text-xs">{turnOpen ? "\u25BC" : "\u25B6"}</span>
             Turn Detection
           </button>
         </div>
@@ -1039,6 +1119,27 @@ function App() {
               }
               setTurnConfigs([{ id: "turn-1", label: "turn-1", backend, params }]);
             }}
+          />
+        )}
+      </div>
+
+      {/* Pipeline Mode Config Panel */}
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <button
+            className="flex items-center gap-1 text-sm font-medium text-left"
+            onClick={() => setPipelineOpen((v) => !v)}
+          >
+            <span className="text-muted-foreground text-xs">{pipelineOpen ? "\u25BC" : "\u25B6"}</span>
+            Pipeline Mode
+          </button>
+        </div>
+        {pipelineOpen && (
+          <PipelineConfigPanel
+            configs={pipelineConfigs}
+            vadConfigs={configs}
+            turnConfigs={turnConfigs}
+            onConfigsChange={setPipelineConfigs}
           />
         )}
       </div>
