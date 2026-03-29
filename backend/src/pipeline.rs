@@ -519,7 +519,9 @@ pub fn run_pipeline_mode(
                         }
 
                         if !speech_started && vad.probability > config.speech_start_threshold {
-                            // Speech start
+                            // Speech start — reset detector so stale audio
+                            // from the previous turn doesn't pollute the new one.
+                            detector.reset();
                             speech_started = true;
                             silence_start_ms = None;
 

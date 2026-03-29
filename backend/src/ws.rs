@@ -556,8 +556,9 @@ pub async fn handle_ws(socket: WebSocket) {
                     frame_duration_ms,
                     &audio_tx,
                 );
-                // Drop sender so pipeline knows the stream is finished
+                // Drop senders so pipelines know the stream is finished
                 drop(audio_tx);
+                drop(vad_broadcast_tx);
 
                 // Collect messages from audio + pipeline into one channel
                 let (msg_tx, mut msg_rx) = tokio::sync::mpsc::channel::<ServerMessage>(512);
