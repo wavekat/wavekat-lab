@@ -10,7 +10,3 @@ hound = "3.5"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
-[patch.crates-io]
-# Use local wavekat-turn until the full pipecat implementation is published.
-# Remove once wavekat-turn >= 0.0.4 (with complete pipecat support) is on crates.io.
-wavekat-turn = { path = "../wavekat-turn/crates/wavekat-turn" }
