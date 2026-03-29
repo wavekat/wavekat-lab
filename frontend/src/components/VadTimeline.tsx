@@ -95,7 +95,7 @@ export function VadTimeline({
     [recording, totalDurationMs, viewport],
   );
 
-  const { isDragging, handleMouseDown, handleMouseMove, handleMouseUp, handleMouseLeave, cursor } =
+  const { handleMouseDown, handleMouseMove, handleMouseUp, handleMouseLeave, cursor } =
     useTimelineDrag({ viewport, effectiveViewport, width, totalDurationMs, recording, onViewportChange, onHoverTimeChange });
 
   useEffect(() => {

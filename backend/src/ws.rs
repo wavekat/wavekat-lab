@@ -205,7 +205,10 @@ pub async fn handle_ws(socket: WebSocket) {
             ClientMessage::SetPipelineConfigs {
                 configs: new_pipeline_configs,
             } => {
-                tracing::info!(count = new_pipeline_configs.len(), "pipeline configs updated");
+                tracing::info!(
+                    count = new_pipeline_configs.len(),
+                    "pipeline configs updated"
+                );
                 pipeline_configs = new_pipeline_configs;
             }
 
@@ -511,8 +514,7 @@ pub async fn handle_ws(socket: WebSocket) {
                 let (audio_tx, _) = broadcast::channel::<AudioFrame>(total_frames.max(16));
 
                 // Create VAD probability broadcast for pipeline mode
-                let (vad_broadcast_tx, _) =
-                    broadcast::channel::<pipeline::VadProbability>(4096);
+                let (vad_broadcast_tx, _) = broadcast::channel::<pipeline::VadProbability>(4096);
                 let vad_broadcast = if pipeline_configs.is_empty() {
                     None
                 } else {
