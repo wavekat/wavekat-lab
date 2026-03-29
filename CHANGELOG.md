@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.0.6](https://github.com/wavekat/wavekat-lab/compare/v0.0.5...v0.0.6) (2026-03-29)
+
+
+### Bug Fixes
+
+* update Cargo.lock after release-please version bump ([#12](https://github.com/wavekat/wavekat-lab/issues/12)) ([a0503a4](https://github.com/wavekat/wavekat-lab/commit/a0503a4fa16a5778160986465bc60fba02b9f7bd))
+* use cargo update --workspace to avoid bumping all deps ([#14](https://github.com/wavekat/wavekat-lab/issues/14)) ([aa11a6a](https://github.com/wavekat/wavekat-lab/commit/aa11a6ad1258f7ca60f4ff0d1d02ceb481cec181))
+
 ## [0.0.5](https://github.com/wavekat/wavekat-lab/compare/v0.0.4...v0.0.5) (2026-03-29)
 
 
