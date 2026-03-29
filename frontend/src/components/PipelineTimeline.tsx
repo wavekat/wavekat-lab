@@ -131,10 +131,13 @@ export function PipelineTimeline({
       }
     }
 
-    const bandY = height * 0.25;
-    const bandHeight = height * 0.4;
+    const bandY = height * 0.3;
+    const bandHeight = height * 0.3;
     const dotRadius = 6;
     const dotY = bandY + bandHeight / 2;
+
+    // Collect label info while drawing bands and dots
+    const labelEntries: Array<{ x: number; text: string; color: string }> = [];
 
     for (const seg of segments) {
       const endMs = seg.endMs ?? totalDurationMs;
@@ -161,20 +164,49 @@ export function PipelineTimeline({
         ctx.fill();
         ctx.globalAlpha = 1;
 
-        // Label below
+        // Collect label for deferred layout
+        const durMs = seg.endMs - seg.startMs;
+        const dur = durMs >= 1000 ? `${(durMs / 1000).toFixed(1)}s` : `${durMs.toFixed(0)}ms`;
         const conf = seg.turnConfidence != null ? `${(seg.turnConfidence * 100).toFixed(0)}%` : "";
         const lat = seg.turnLatencyMs != null ? `${seg.turnLatencyMs}ms` : "";
-        const labelText = [seg.turnState, conf, lat].filter(Boolean).join(" ");
-
-        ctx.font = "10px monospace";
-        ctx.fillStyle = color;
-        ctx.globalAlpha = 0.85;
-        ctx.textAlign = "center";
-        ctx.fillText(labelText, dotX, height - 2);
-        ctx.globalAlpha = 1;
-        ctx.textAlign = "start";
+        const labelText = [dur, conf, lat].filter(Boolean).join(" ");
+        labelEntries.push({ x: dotX, text: labelText, color });
       }
     }
+
+    // Draw labels with collision avoidance – stagger between bottom and top
+    ctx.font = "10px monospace";
+    const labelYBottom = height - 2;
+    const labelYTop = 10;
+    const labelGap = 4;
+    let lastRightBottom = -Infinity;
+    let lastRightTop = -Infinity;
+
+    for (const lbl of labelEntries) {
+      const tw = ctx.measureText(lbl.text).width;
+      const left = lbl.x - tw / 2;
+      const right = lbl.x + tw / 2;
+
+      let yPos: number;
+      if (left > lastRightBottom + labelGap) {
+        yPos = labelYBottom;
+        lastRightBottom = right;
+      } else if (left > lastRightTop + labelGap) {
+        yPos = labelYTop;
+        lastRightTop = right;
+      } else {
+        // Both levels congested – place on bottom anyway
+        yPos = labelYBottom;
+        lastRightBottom = right;
+      }
+
+      ctx.fillStyle = lbl.color;
+      ctx.globalAlpha = 0.85;
+      ctx.textAlign = "center";
+      ctx.fillText(lbl.text, lbl.x, yPos);
+    }
+    ctx.globalAlpha = 1;
+    ctx.textAlign = "start";
 
     // Hover line
     if (hoverTimeMs != null) {
