@@ -606,7 +606,11 @@ function App() {
       <div className="flex items-center justify-between">
         <div className="flex items-baseline gap-2">
           <h1 className="text-xl font-bold">wavekat-lab</h1>
-          <span className="text-xs text-muted-foreground">by WaveKat</span>
+          <span className="text-xs text-muted-foreground">by{" "}
+            <a href="https://wavekat.com" target="_blank" rel="noopener noreferrer" className="hover:text-[#863bff] transition-colors group">
+              <span className="inline-block group-hover:hidden">WaveKat</span><span className="hidden group-hover:inline-block">wavekat.com</span>
+            </a>
+          </span>
         </div>
         <span className={`text-xs ${connectionColor[connectionState]}`}>
           {connectionState}
@@ -1161,6 +1165,18 @@ function App() {
         </div>
         {logsOpen && <LogPanel logs={logs} maxHeight={240} />}
       </div>
+
+      <Separator />
+
+      {/* Footer */}
+      <footer className="text-center text-xs text-muted-foreground py-4">
+        &copy; {new Date().getFullYear()}{" "}
+        <a href="https://wavekat.com" target="_blank" rel="noopener noreferrer" className="hover:text-[#863bff] transition-colors group">
+          <span className="inline-block group-hover:hidden">WaveKat</span><span className="hidden group-hover:inline-block">wavekat.com</span>
+        </a>
+        {" "}&middot;{" "}
+        <a href="https://github.com/wavekat/wavekat-lab" target="_blank" rel="noopener noreferrer" className="hover:text-foreground transition-colors">v0.0.6</a>
+      </footer>
     </div>
   );
 }
