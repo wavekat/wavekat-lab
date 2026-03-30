@@ -2,6 +2,8 @@ import { useRef, useEffect, useMemo } from "react";
 import { type Viewport, timeToPixel } from "@/lib/viewport";
 import { useTimelineDrag } from "@/lib/useTimelineDrag";
 import { STATE_COLORS } from "@/lib/turnColors";
+import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
+import { Info } from "lucide-react";
 import type { PipelineResultPoint, PipelineConfig } from "@/lib/websocket";
 
 interface SpeechSegment {
@@ -222,6 +224,20 @@ export function PipelineTimeline({
     }
   }, [segments, totalDurationMs, effectiveViewport, width, height, hoverTimeMs, playheadMs]);
 
+  // RTF stats across completed segments
+  const rtfStats = useMemo(() => {
+    const done = segments.filter((s) => s.endMs != null && s.turnLatencyMs != null);
+    if (done.length === 0) return null;
+    const totalAudioMs = done.reduce((sum, s) => sum + (s.endMs! - s.startMs), 0);
+    const totalLatencyMs = done.reduce((sum, s) => sum + s.turnLatencyMs!, 0);
+    if (totalAudioMs <= 0) return null;
+    const avgAudioMs = totalAudioMs / done.length;
+    const avgLatencyMs = totalLatencyMs / done.length;
+    return { rtf: totalLatencyMs / totalAudioMs, avgAudioMs, avgLatencyMs };
+  }, [segments]);
+
+  const completedCount = useMemo(() => segments.filter((s) => s.endMs != null).length, [segments]);
+
   // Find hovered segment for tooltip
   const hoveredSegment = useMemo(() => {
     if (hoverTimeMs == null) return null;
@@ -244,9 +260,46 @@ export function PipelineTimeline({
             </span>
           )}
         </div>
-        <div className="ml-auto text-xs text-muted-foreground font-mono">
-          {segments.filter((s) => s.endMs != null).length} segments
-        </div>
+        {rtfStats != null && (
+          <div className="text-xs text-muted-foreground font-mono ml-auto flex items-baseline gap-1">
+            <div className="flex flex-col items-end">
+              <span className="tabular-nums">RTF {rtfStats.rtf.toFixed(4)}</span>
+              <span className="opacity-70">{completedCount} segments</span>
+            </div>
+            <Tooltip>
+              <TooltipTrigger className="text-muted-foreground/50 hover:text-muted-foreground transition-colors">
+                <Info className="size-3" />
+              </TooltipTrigger>
+              <TooltipContent side="left" align="start" className="block max-w-none font-mono text-[11px] leading-relaxed py-2">
+                <div className="whitespace-nowrap opacity-70 mb-1">RTF = avg latency / avg audio duration</div>
+                <table className="border-spacing-x-2 border-separate">
+                  <tbody>
+                    <tr>
+                      <td className="text-right opacity-70">avg audio</td>
+                      <td className="whitespace-nowrap">{rtfStats.avgAudioMs.toFixed(1)}ms</td>
+                    </tr>
+                    <tr>
+                      <td className="text-right opacity-70">avg latency</td>
+                      <td className="whitespace-nowrap">{rtfStats.avgLatencyMs.toFixed(1)}ms</td>
+                    </tr>
+                    <tr>
+                      <td className="text-right font-semibold pt-0.5 border-t border-background/20">total</td>
+                      <td className="whitespace-nowrap pt-0.5 border-t border-background/20">
+                        {rtfStats.avgLatencyMs.toFixed(1)}ms / {rtfStats.avgAudioMs.toFixed(1)}ms ≈ <span className="font-semibold">{rtfStats.rtf.toFixed(4)}</span>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+                <div className="mt-1 opacity-70">Lower is better. RTF &lt; 1 = faster than real-time.</div>
+              </TooltipContent>
+            </Tooltip>
+          </div>
+        )}
+        {rtfStats == null && (
+          <div className="ml-auto text-xs text-muted-foreground font-mono">
+            {completedCount} segments
+          </div>
+        )}
       </div>
 
       {/* Canvas */}
