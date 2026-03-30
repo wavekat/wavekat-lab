@@ -499,23 +499,39 @@ pub fn run_pipeline_mode(
         tokio::spawn(async move {
             let mut speech_started = false;
             let mut silence_start_ms: Option<f64> = None;
+            // Buffer audio frames so we can drain them deterministically
+            // when the corresponding VAD probability arrives.
+            let mut audio_buffer: Vec<AudioFrame> = Vec::new();
 
             loop {
                 tokio::select! {
                     Ok(frame) = audio_rx.recv() => {
-                        if speech_started {
-                            let samples = if sample_rate != 16000 {
-                                resample_linear(&frame.samples, sample_rate, 16000)
-                            } else {
-                                frame.samples.clone()
-                            };
-                            let turn_frame = TurnAudioFrame::new(&samples, 16000);
-                            detector.push_audio(&turn_frame);
-                        }
+                        audio_buffer.push(frame);
                     }
                     Ok(vad) = vad_rx.recv() => {
                         if vad.config_id != config.vad_config_id {
                             continue;
+                        }
+
+                        // Drain all buffered audio frames up to (and including)
+                        // this VAD timestamp before making speech decisions.
+                        // This guarantees the turn detector always receives the
+                        // same audio regardless of tokio scheduling order.
+                        let drain_end = audio_buffer
+                            .partition_point(|f| f.timestamp_ms <= vad.timestamp_ms);
+                        let frames_to_process: Vec<_> =
+                            audio_buffer.drain(..drain_end).collect();
+
+                        for frame in &frames_to_process {
+                            if speech_started {
+                                let samples = if sample_rate != 16000 {
+                                    resample_linear(&frame.samples, sample_rate, 16000)
+                                } else {
+                                    frame.samples.clone()
+                                };
+                                let turn_frame = TurnAudioFrame::new(&samples, 16000);
+                                detector.push_audio(&turn_frame);
+                            }
                         }
 
                         if !speech_started && vad.probability > config.speech_start_threshold {
