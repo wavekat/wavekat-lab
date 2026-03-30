@@ -87,6 +87,14 @@ The Rust backend handles all audio capture and processing; the React frontend is
            Browser UI
 ```
 
+## Videos
+
+| Video | Description |
+|---|---|
+| <a href="https://www.youtube.com/watch?v=_dRgH6FZRpM"><img src="https://img.youtube.com/vi/_dRgH6FZRpM/maxresdefault.jpg" alt="Pipecat Smart Turn Visual Test" width="400"></a> | **[Testing Pipecat Smart Turn](https://www.youtube.com/watch?v=_dRgH6FZRpM)** <br> Visual test of Pipecat Smart Turn v3 — live recording and VAD-gated pipeline mode simulating production workflows. |
+| <a href="https://www.youtube.com/watch?v=j2KkhpFRKaY"><img src="https://img.youtube.com/vi/j2KkhpFRKaY/maxresdefault.jpg" alt="FireRed VAD Showdown" width="400"></a> | **[Adding FireRedVAD as the 4th backend](https://www.youtube.com/watch?v=j2KkhpFRKaY)** <br> Benchmarking Xiaohongshu's FireRedVAD against Silero, TEN VAD, and WebRTC across accuracy and latency. |
+| <a href="https://www.youtube.com/watch?v=450O3w9c-e8"><img src="https://img.youtube.com/vi/450O3w9c-e8/maxresdefault.jpg" alt="VAD Lab Demo" width="400"></a> | **[VAD Lab: Real-time multi-backend comparison](https://www.youtube.com/watch?v=450O3w9c-e8)** <br> Live demo of VAD Lab comparing WebRTC, Silero, and TEN VAD side by side with real-time waveform visualization. |
+
 ## License
 
 Licensed under [Apache 2.0](LICENSE).
