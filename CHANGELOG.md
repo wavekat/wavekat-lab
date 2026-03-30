@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.7](https://github.com/wavekat/wavekat-lab/compare/v0.0.6...v0.0.7) (2026-03-30)
+
+
+### Features
+
+* add wavekat.com link and footer ([#15](https://github.com/wavekat/wavekat-lab/issues/15)) ([6aac74e](https://github.com/wavekat/wavekat-lab/commit/6aac74e447aacd5f169bdc4196b209d7d53a372f))
+
 ## [0.0.6](https://github.com/wavekat/wavekat-lab/compare/v0.0.5...v0.0.6) (2026-03-29)
 
 
