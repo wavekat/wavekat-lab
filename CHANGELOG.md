@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.0.8](https://github.com/wavekat/wavekat-lab/compare/v0.0.7...v0.0.8) (2026-03-30)
+
+
+### Features
+
+* add RTF display with tooltip to pipeline mode ([#17](https://github.com/wavekat/wavekat-lab/issues/17)) ([6e72f97](https://github.com/wavekat/wavekat-lab/commit/6e72f9766881dc89d9dc62944d154e35636a7215))
+
+
+### Bug Fixes
+
+* make pipeline mode results deterministic ([#19](https://github.com/wavekat/wavekat-lab/issues/19)) ([c36cbe3](https://github.com/wavekat/wavekat-lab/commit/c36cbe319a82b5b9ddec0a6f5e2cab0a703ca932))
+
 ## [0.0.7](https://github.com/wavekat/wavekat-lab/compare/v0.0.6...v0.0.7) (2026-03-30)
 
 
