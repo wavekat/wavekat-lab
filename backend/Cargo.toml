@@ -1,6 +1,6 @@
 [package]
 name = "lab"
-version = "0.0.8" # x-release-please-version
+version = "0.0.9" # x-release-please-version
 edition = "2021"
 
 [dependencies]
