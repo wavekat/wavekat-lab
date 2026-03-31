@@ -162,11 +162,13 @@ export function PipelineTimeline({
 
         // Collect label for deferred layout
         const durMs = seg.endMs - seg.startMs;
-        const dur = durMs >= 1000 ? `${(durMs / 1000).toFixed(1)}s` : `${durMs.toFixed(0)}ms`;
+        const fmtMs = (ms: number) => ms >= 1000 ? `${(ms / 1000).toFixed(1)}s` : `${ms.toFixed(0)}ms`;
+        const dur = fmtMs(durMs);
         const conf = seg.turnConfidence != null ? `${(seg.turnConfidence * 100).toFixed(0)}%` : "";
         const lat = seg.turnLatencyMs != null ? `${seg.turnLatencyMs}ms` : "";
-        const audioDur = seg.audioDurationMs != null
-          ? (seg.audioDurationMs >= 1000 ? `buf:${(seg.audioDurationMs / 1000).toFixed(1)}s` : `buf:${seg.audioDurationMs}ms`)
+        // Only show buffer duration when it differs notably from segment duration
+        const audioDur = seg.audioDurationMs != null && Math.abs(seg.audioDurationMs - durMs) > 200
+          ? `[${fmtMs(seg.audioDurationMs)}]`
           : "";
         const labelText = [dur, conf, lat, audioDur].filter(Boolean).join(" ");
         labelEntries.push({ x: dotX, text: labelText, color });
