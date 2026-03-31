@@ -12,7 +12,7 @@ wavekat-vad = { version = "0.1", features = [
     "firered",
     "serde",
 ] }
-wavekat-turn = { version = "0.0.4", features = ["pipecat"] }
+wavekat-turn = { version = "0.0.6", features = ["pipecat"] }
 axum = { version = "0.8", features = ["ws", "multipart"] }
 tokio = { workspace = true }
 tower-http = { version = "0.6", features = ["cors", "fs"] }

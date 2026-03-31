@@ -5,7 +5,7 @@ mod spectrum;
 mod ws;
 
 use axum::{
-    extract::{Multipart, WebSocketUpgrade},
+    extract::{DefaultBodyLimit, Multipart, WebSocketUpgrade},
     http::StatusCode,
     response::{Html, IntoResponse, Json},
     routing::{get, post},
@@ -41,6 +41,7 @@ async fn main() {
     let app = Router::new()
         .route("/ws", get(ws_handler))
         .route("/upload", post(upload_handler))
+        .layer(DefaultBodyLimit::max(256 * 1024 * 1024))
         .route("/", get(index_handler))
         .layer(CorsLayer::permissive());
 

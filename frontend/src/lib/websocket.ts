@@ -32,6 +32,7 @@ export interface PipelineConfig {
   speech_end_threshold: number;
   speech_start_threshold: number;
   min_silence_ms: number;
+  reset_mode: "hard" | "soft";
 }
 
 export interface PipelineResultPoint {
@@ -40,6 +41,7 @@ export interface PipelineResultPoint {
   turn_state?: string;
   turn_confidence?: number;
   turn_latency_ms?: number;
+  audio_duration_ms?: number;
 }
 
 export interface ParamInfo {
@@ -61,7 +63,7 @@ export type ServerMessage =
   | { type: "vad"; config_id: string; timestamp_ms: number; probability: number; inference_us: number; stage_times: Array<{ name: string; us: number }>; frame_duration_ms: number }
   | { type: "turn_backends"; backends: Record<string, ParamInfo[]> }
   | { type: "turn"; config_id: string; timestamp_ms: number; state: string; confidence: number; latency_ms: number; stage_times: Array<{ name: string; us: number }> }
-  | { type: "pipeline"; config_id: string; timestamp_ms: number; event: string; turn_state?: string; turn_confidence?: number; turn_latency_ms?: number }
+  | { type: "pipeline"; config_id: string; timestamp_ms: number; event: string; turn_state?: string; turn_confidence?: number; turn_latency_ms?: number; audio_duration_ms?: number }
   | { type: "done" }
   | { type: "error"; message: string };
 

@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use std::time::Instant;
 use tokio::sync::{broadcast, mpsc};
 use wavekat_turn::audio::PipecatSmartTurn;
-use wavekat_turn::{AudioFrame as TurnAudioFrame, AudioTurnDetector, TurnState};
+use wavekat_turn::{AudioFrame as TurnAudioFrame, AudioTurnDetector, TurnController, TurnState};
 use wavekat_vad::preprocessing::Preprocessor;
 use wavekat_vad::{FrameAdapter, ProcessTimings, VoiceActivityDetector};
 
@@ -298,6 +298,14 @@ pub struct PipelineConfig {
     pub speech_start_threshold: f32,
     /// Silence must hold for this long before firing (ms).
     pub min_silence_ms: u32,
+    /// Reset mode on speech start: "hard" always resets the turn detector,
+    /// "soft" uses `reset_if_finished` to preserve audio across mid-sentence pauses.
+    #[serde(default = "default_reset_mode")]
+    pub reset_mode: String,
+}
+
+fn default_reset_mode() -> String {
+    "hard".to_string()
 }
 
 /// Lightweight VAD probability event for broadcasting to pipeline mode runners.
@@ -316,6 +324,7 @@ pub enum PipelineModeEvent {
         turn_state: String,
         turn_confidence: f32,
         turn_latency_ms: u64,
+        audio_duration_ms: u64,
     },
 }
 
@@ -447,6 +456,20 @@ fn create_turn_detector(config: &TurnConfig) -> Result<Box<dyn AudioTurnDetector
     }
 }
 
+/// Create a TurnController-wrapped detector from a config.
+fn create_turn_controller(
+    config: &TurnConfig,
+) -> Result<TurnController<PipecatSmartTurn>, String> {
+    match config.backend.as_str() {
+        "pipecat" => {
+            let detector = PipecatSmartTurn::new()
+                .map_err(|e| format!("failed to create PipecatSmartTurn: {e}"))?;
+            Ok(TurnController::new(detector))
+        }
+        other => Err(format!("unknown turn backend: {other}")),
+    }
+}
+
 /// Run the pipeline mode: VAD-gated turn detection.
 ///
 /// For each `PipelineConfig`, spawns a task that subscribes to both the audio
@@ -479,19 +502,20 @@ pub fn run_pipeline_mode(
             }
         };
 
-        // Create the turn detector eagerly (avoids blocking inside async task)
-        let mut detector = match create_turn_detector(&turn_config) {
-            Ok(d) => d,
+        // Create a TurnController-wrapped detector for pipeline mode
+        let mut ctrl = match create_turn_controller(&turn_config) {
+            Ok(c) => c,
             Err(e) => {
                 tracing::error!(
                     pipeline_id = %pipeline_config.id,
-                    "failed to create turn detector for pipeline: {e}"
+                    "failed to create turn controller for pipeline: {e}"
                 );
                 continue;
             }
         };
 
         let config = pipeline_config.clone();
+        let use_soft_reset = config.reset_mode == "soft";
         let mut audio_rx = audio_tx.subscribe();
         let mut vad_rx = vad_broadcast.subscribe();
         let result_tx = result_tx.clone();
@@ -530,14 +554,18 @@ pub fn run_pipeline_mode(
                                     frame.samples.clone()
                                 };
                                 let turn_frame = TurnAudioFrame::new(&samples, 16000);
-                                detector.push_audio(&turn_frame);
+                                ctrl.push_audio(&turn_frame);
                             }
                         }
 
                         if !speech_started && vad.probability > config.speech_start_threshold {
-                            // Speech start — reset detector so stale audio
-                            // from the previous turn doesn't pollute the new one.
-                            detector.reset();
+                            // Speech start — reset detector based on configured mode.
+                            // Soft mode preserves audio across mid-sentence pauses.
+                            if use_soft_reset {
+                                ctrl.reset_if_finished();
+                            } else {
+                                ctrl.reset();
+                            }
                             speech_started = true;
                             silence_start_ms = None;
 
@@ -558,21 +586,21 @@ pub fn run_pipeline_mode(
                             if let Some(start) = silence_start_ms {
                                 if vad.timestamp_ms - start >= config.min_silence_ms as f64 {
                                     // Silence held long enough — predict and emit speech end
-                                    let (state, confidence, latency) = match detector.predict() {
+                                    let (state, confidence, latency, audio_dur) = match ctrl.predict() {
                                         Ok(pred) => {
                                             let state = match pred.state {
                                                 TurnState::Finished => "finished",
                                                 TurnState::Unfinished => "unfinished",
                                                 TurnState::Wait => "wait",
                                             };
-                                            (state.to_string(), pred.confidence, pred.latency_ms)
+                                            (state.to_string(), pred.confidence, pred.latency_ms, pred.audio_duration_ms)
                                         }
                                         Err(e) => {
                                             tracing::warn!(
                                                 pipeline_id = %config.id,
                                                 "turn prediction error: {e}"
                                             );
-                                            ("error".to_string(), 0.0, 0)
+                                            ("error".to_string(), 0.0, 0, 0)
                                         }
                                     };
 
@@ -583,6 +611,7 @@ pub fn run_pipeline_mode(
                                             turn_state: state,
                                             turn_confidence: confidence,
                                             turn_latency_ms: latency,
+                                            audio_duration_ms: audio_dur,
                                         },
                                     };
                                     if result_tx.send(result).await.is_err() {

@@ -427,6 +427,7 @@ function App() {
               turn_state: msg.turn_state,
               turn_confidence: msg.turn_confidence,
               turn_latency_ms: msg.turn_latency_ms,
+              audio_duration_ms: msg.audio_duration_ms,
             },
           ],
         }));
