@@ -324,6 +324,7 @@ pub enum PipelineModeEvent {
         turn_state: String,
         turn_confidence: f32,
         turn_latency_ms: u64,
+        audio_duration_ms: u64,
     },
 }
 
@@ -585,21 +586,21 @@ pub fn run_pipeline_mode(
                             if let Some(start) = silence_start_ms {
                                 if vad.timestamp_ms - start >= config.min_silence_ms as f64 {
                                     // Silence held long enough — predict and emit speech end
-                                    let (state, confidence, latency) = match ctrl.predict() {
+                                    let (state, confidence, latency, audio_dur) = match ctrl.predict() {
                                         Ok(pred) => {
                                             let state = match pred.state {
                                                 TurnState::Finished => "finished",
                                                 TurnState::Unfinished => "unfinished",
                                                 TurnState::Wait => "wait",
                                             };
-                                            (state.to_string(), pred.confidence, pred.latency_ms)
+                                            (state.to_string(), pred.confidence, pred.latency_ms, pred.audio_duration_ms)
                                         }
                                         Err(e) => {
                                             tracing::warn!(
                                                 pipeline_id = %config.id,
                                                 "turn prediction error: {e}"
                                             );
-                                            ("error".to_string(), 0.0, 0)
+                                            ("error".to_string(), 0.0, 0, 0)
                                         }
                                     };
 
@@ -610,6 +611,7 @@ pub fn run_pipeline_mode(
                                             turn_state: state,
                                             turn_confidence: confidence,
                                             turn_latency_ms: latency,
+                                            audio_duration_ms: audio_dur,
                                         },
                                     };
                                     if result_tx.send(result).await.is_err() {

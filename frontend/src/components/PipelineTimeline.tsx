@@ -12,6 +12,7 @@ interface SpeechSegment {
   turnState?: string;
   turnConfidence?: number;
   turnLatencyMs?: number;
+  audioDurationMs?: number;
 }
 
 interface PipelineTimelineProps {
@@ -89,6 +90,7 @@ export function PipelineTimeline({
           turnState: event.turn_state,
           turnConfidence: event.turn_confidence,
           turnLatencyMs: event.turn_latency_ms,
+          audioDurationMs: event.audio_duration_ms,
         });
         currentStart = null;
       }
@@ -163,7 +165,10 @@ export function PipelineTimeline({
         const dur = durMs >= 1000 ? `${(durMs / 1000).toFixed(1)}s` : `${durMs.toFixed(0)}ms`;
         const conf = seg.turnConfidence != null ? `${(seg.turnConfidence * 100).toFixed(0)}%` : "";
         const lat = seg.turnLatencyMs != null ? `${seg.turnLatencyMs}ms` : "";
-        const labelText = [dur, conf, lat].filter(Boolean).join(" ");
+        const audioDur = seg.audioDurationMs != null
+          ? (seg.audioDurationMs >= 1000 ? `buf:${(seg.audioDurationMs / 1000).toFixed(1)}s` : `buf:${seg.audioDurationMs}ms`)
+          : "";
+        const labelText = [dur, conf, lat, audioDur].filter(Boolean).join(" ");
         labelEntries.push({ x: dotX, text: labelText, color });
       }
     }
