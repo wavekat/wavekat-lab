@@ -1009,7 +1009,7 @@ dependencies = [
 
 [[package]]
 name = "lab"
-version = "0.0.8"
+version = "0.0.9"
 dependencies = [
  "axum",
  "clap 4.6.0",
@@ -2529,6 +2529,8 @@ checksum = "6bd05999912329cd2f481c569f9f8952e2e40664f1a7e99f255e193c64c621e4"
 [[package]]
 name = "wavekat-turn"
 version = "0.0.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dbb4b044d868af45639d119dc3f6dcd599b00bef60a445e7eb767c5ae4bfe2c7"
 dependencies = [
  "ndarray",
  "ort",
