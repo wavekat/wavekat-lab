@@ -2641,9 +2641,7 @@ checksum = "6bd05999912329cd2f481c569f9f8952e2e40664f1a7e99f255e193c64c621e4"
 
 [[package]]
 name = "wavekat-turn"
-version = "0.0.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c65b90b9e65bc945ff1ec46176a8ab8c968932a00d7435f7437870a4ef1e11b9"
+version = "0.0.5"
 dependencies = [
  "ndarray",
  "ort",

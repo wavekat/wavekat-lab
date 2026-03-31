@@ -32,6 +32,7 @@ export interface PipelineConfig {
   speech_end_threshold: number;
   speech_start_threshold: number;
   min_silence_ms: number;
+  reset_mode: "hard" | "soft";
 }
 
 export interface PipelineResultPoint {

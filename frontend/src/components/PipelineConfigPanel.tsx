@@ -53,6 +53,7 @@ export function PipelineConfigPanel({
         speech_start_threshold: 0.5,
         speech_end_threshold: 0.3,
         min_silence_ms: 300,
+        reset_mode: "hard",
       },
     ]);
   };
@@ -123,45 +124,45 @@ export function PipelineConfigPanel({
                 </div>
               </div>
             </CardHeader>
-            <CardContent className="space-y-3">
-              {/* VAD Config selector */}
-              <div className="space-y-1">
-                <Label className="text-xs">VAD Config</Label>
-                <Select
-                  value={config.vad_config_id}
-                  onValueChange={(v) => { if (v) updateConfig(config.id, { vad_config_id: v }); }}
-                >
-                  <SelectTrigger className="h-8 text-xs">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="w-auto min-w-64">
-                    {vadConfigs.map((vc) => (
-                      <SelectItem key={vc.id} value={vc.id}>
-                        {vc.label} <span className="text-muted-foreground">({vc.id})</span>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Turn Config selector */}
-              <div className="space-y-1">
-                <Label className="text-xs">Turn Config</Label>
-                <Select
-                  value={config.turn_config_id}
-                  onValueChange={(v) => { if (v) updateConfig(config.id, { turn_config_id: v }); }}
-                >
-                  <SelectTrigger className="h-8 text-xs">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="w-auto min-w-64">
-                    {turnConfigs.map((tc) => (
-                      <SelectItem key={tc.id} value={tc.id}>
-                        {tc.label} <span className="text-muted-foreground">({tc.id})</span>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+            <CardContent className="space-y-2">
+              {/* VAD + Turn Config selectors */}
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-1">
+                  <Label className="text-xs">VAD Config</Label>
+                  <Select
+                    value={config.vad_config_id}
+                    onValueChange={(v) => { if (v) updateConfig(config.id, { vad_config_id: v }); }}
+                  >
+                    <SelectTrigger className="h-8 text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="w-auto min-w-64">
+                      {vadConfigs.map((vc) => (
+                        <SelectItem key={vc.id} value={vc.id}>
+                          {vc.label} <span className="text-muted-foreground">({vc.id})</span>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Turn Config</Label>
+                  <Select
+                    value={config.turn_config_id}
+                    onValueChange={(v) => { if (v) updateConfig(config.id, { turn_config_id: v }); }}
+                  >
+                    <SelectTrigger className="h-8 text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="w-auto min-w-64">
+                      {turnConfigs.map((tc) => (
+                        <SelectItem key={tc.id} value={tc.id}>
+                          {tc.label} <span className="text-muted-foreground">({tc.id})</span>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
 
               {/* Thresholds */}
@@ -218,31 +219,58 @@ export function PipelineConfigPanel({
                 </div>
               </div>
 
-              {/* Min silence */}
-              <div className="space-y-1">
-                <Label className="text-xs flex items-center gap-1">
-                  Min silence (ms)
-                  <Tooltip>
-                    <TooltipTrigger className="text-muted-foreground/50 hover:text-muted-foreground transition-colors">
-                      <Info className="size-3" />
-                    </TooltipTrigger>
-                    <TooltipContent side="top" className="max-w-56">
-                      After VAD drops below the end threshold, silence must hold for this duration before the speech segment closes and a turn prediction fires. Prevents premature cuts on brief pauses.
-                    </TooltipContent>
-                  </Tooltip>
-                </Label>
-                <Input
-                  type="number"
-                  min={0}
-                  max={5000}
-                  step={50}
-                  value={config.min_silence_ms}
-                  onChange={(e) => {
-                    const val = parseInt(e.target.value, 10);
-                    if (!isNaN(val)) updateConfig(config.id, { min_silence_ms: val });
-                  }}
-                  className="h-8 text-xs w-24"
-                />
+              {/* Min silence + Reset mode */}
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-1">
+                  <Label className="text-xs flex items-center gap-1">
+                    Min silence (ms)
+                    <Tooltip>
+                      <TooltipTrigger className="text-muted-foreground/50 hover:text-muted-foreground transition-colors">
+                        <Info className="size-3" />
+                      </TooltipTrigger>
+                      <TooltipContent side="top" className="max-w-56">
+                        After VAD drops below the end threshold, silence must hold for this duration before the speech segment closes and a turn prediction fires. Prevents premature cuts on brief pauses.
+                      </TooltipContent>
+                    </Tooltip>
+                  </Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    max={5000}
+                    step={50}
+                    value={config.min_silence_ms}
+                    onChange={(e) => {
+                      const val = parseInt(e.target.value, 10);
+                      if (!isNaN(val)) updateConfig(config.id, { min_silence_ms: val });
+                    }}
+                    className="h-8 text-xs"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs flex items-center gap-1">
+                    Reset mode
+                    <Tooltip>
+                      <TooltipTrigger className="text-muted-foreground/50 hover:text-muted-foreground transition-colors">
+                        <Info className="size-3" />
+                      </TooltipTrigger>
+                      <TooltipContent side="top" className="max-w-56">
+                        Controls how the turn detector resets on speech start. "Hard" always clears the audio buffer. "Soft" preserves the buffer when the previous prediction was "unfinished", so mid-sentence pauses keep full context.
+                      </TooltipContent>
+                    </Tooltip>
+                  </Label>
+                  <Select
+                    value={config.reset_mode ?? "hard"}
+                    onValueChange={(v) => { if (v) updateConfig(config.id, { reset_mode: v as "hard" | "soft" }); }}
+                  >
+                    <SelectTrigger className="h-8 text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent className="w-auto">
+                      <SelectItem value="hard">Hard</SelectItem>
+                      <SelectItem value="soft">Soft</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
             </CardContent>
           </Card>
