@@ -37,7 +37,8 @@ interface PipelineTimelineProps {
 function formatConfigSummary(config: PipelineConfig, vadLabel?: string, turnLabel?: string): string {
   const vad = vadLabel ?? config.vad_config_id;
   const turn = turnLabel ?? config.turn_config_id;
-  return `${vad} \u2192 ${turn} | start:${config.speech_start_threshold} end:${config.speech_end_threshold} silence:${config.min_silence_ms}ms`;
+  const reset = config.reset_mode === "soft" ? "soft" : "hard";
+  return `${vad} \u2192 ${turn} | start:${config.speech_start_threshold} end:${config.speech_end_threshold} silence:${config.min_silence_ms}ms reset:${reset}`;
 }
 
 export function PipelineTimeline({
