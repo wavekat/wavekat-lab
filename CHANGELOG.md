@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.9](https://github.com/wavekat/wavekat-lab/compare/v0.0.8...v0.0.9) (2026-03-31)
+
+
+### Features
+
+* add pipeline reset mode config ([#21](https://github.com/wavekat/wavekat-lab/issues/21)) ([e5fce45](https://github.com/wavekat/wavekat-lab/commit/e5fce453526b547acf91e2c2fbae4e533e2d9f8b))
+
 ## [0.0.8](https://github.com/wavekat/wavekat-lab/compare/v0.0.7...v0.0.8) (2026-03-30)
 
 
