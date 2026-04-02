@@ -459,18 +459,10 @@ Features:
 - **Progress reporting** — logs progress to GitHub Actions step summary
 - **Parallelized uploads** — configurable concurrency for R2 uploads (default: 20)
 
-### Required secrets
+### Setup guide
 
-| Secret                     | Description                                      |
-|----------------------------|--------------------------------------------------|
-| `AZURE_CREDENTIALS`        | Azure service principal JSON (for `azure/login`) |
-| `AZURE_RESOURCE_GROUP`     | Azure resource group for VMs                     |
-| `GH_RUNNER_REG_TOKEN`      | GitHub runner registration token                 |
-| `DATACOLLECTIVE_API_KEY`   | Mozilla Data Collective API key                  |
-| `CLOUDFLARE_ACCOUNT_ID`    | Cloudflare account ID                            |
-| `CLOUDFLARE_API_TOKEN`     | Cloudflare API token (D1 + R2 permissions)       |
-| `CV_EXPLORER_D1_ID`        | D1 database ID                                   |
-| `CV_EXPLORER_R2_BUCKET`    | R2 bucket name                                   |
+See [`.github/workflows/README.md`](../.github/workflows/README.md) for setup instructions,
+required secrets, and typical usage.
 
 ---
 

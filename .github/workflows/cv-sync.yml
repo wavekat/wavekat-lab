@@ -60,7 +60,7 @@ jobs:
           inlineScript: |
             set -euo pipefail
 
-            RG="${{ secrets.AZURE_RESOURCE_GROUP }}"
+            RG="${{ vars.AZURE_RESOURCE_GROUP }}"
 
             # Find VMs with the cv-sync prefix
             VMS=$(az vm list --resource-group "$RG" --query "[?starts_with(name, 'cv-sync-')].name" -o tsv)

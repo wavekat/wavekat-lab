@@ -54,8 +54,8 @@ jobs:
             set -euo pipefail
 
             RUNNER_NAME="${{ env.RUNNER_PREFIX }}-$(date +%s)"
-            RG="${{ secrets.AZURE_RESOURCE_GROUP }}"
-            LOCATION="${{ secrets.AZURE_LOCATION }}"
+            RG="${{ vars.AZURE_RESOURCE_GROUP }}"
+            LOCATION="${{ vars.AZURE_LOCATION }}"
             MAX_MINUTES=$(( ${{ inputs.max_hours }} * 60 ))
 
             echo "Creating VM: $RUNNER_NAME (size=${{ inputs.vm_size }}, disk=${{ inputs.disk_size_gb }}GB)"
