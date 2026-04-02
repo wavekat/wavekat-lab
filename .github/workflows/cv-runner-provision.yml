@@ -1,0 +1,136 @@
+name: "CV: Provision Runner"
+
+on:
+  workflow_dispatch:
+    inputs:
+      vm_size:
+        description: "Azure VM size"
+        required: true
+        default: "Standard_D4s_v3"
+        type: choice
+        options:
+          - Standard_D2s_v3     # 2 vCPU, 8 GB RAM
+          - Standard_D4s_v3     # 4 vCPU, 16 GB RAM
+          - Standard_D8s_v3     # 8 vCPU, 32 GB RAM
+      disk_size_gb:
+        description: "OS disk size in GB"
+        required: true
+        default: "256"
+      max_hours:
+        description: "Auto-shutdown after N hours"
+        required: true
+        default: "2"
+
+env:
+  RUNNER_PREFIX: cv-sync
+
+jobs:
+  provision:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Generate runner registration token
+        id: token
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT }}
+        run: |
+          TOKEN=$(gh api \
+            --method POST \
+            -H "Accept: application/vnd.github+json" \
+            /repos/${{ github.repository }}/actions/runners/registration-token \
+            --jq '.token')
+          echo "::add-mask::$TOKEN"
+          echo "reg_token=$TOKEN" >> "$GITHUB_OUTPUT"
+
+      - name: Create VM
+        id: vm
+        uses: azure/cli@v2
+        with:
+          inlineScript: |
+            set -euo pipefail
+
+            RUNNER_NAME="${{ env.RUNNER_PREFIX }}-$(date +%s)"
+            RG="${{ secrets.AZURE_RESOURCE_GROUP }}"
+            LOCATION="${{ secrets.AZURE_LOCATION }}"
+            MAX_MINUTES=$(( ${{ inputs.max_hours }} * 60 ))
+
+            echo "Creating VM: $RUNNER_NAME (size=${{ inputs.vm_size }}, disk=${{ inputs.disk_size_gb }}GB)"
+
+            az vm create \
+              --resource-group "$RG" \
+              --location "$LOCATION" \
+              --name "$RUNNER_NAME" \
+              --image Ubuntu2404 \
+              --size "${{ inputs.vm_size }}" \
+              --os-disk-size-gb "${{ inputs.disk_size_gb }}" \
+              --os-disk-delete-option Delete \
+              --nic-delete-option Delete \
+              --admin-username azureuser \
+              --generate-ssh-keys \
+              --public-ip-sku Standard
+
+            echo "VM created. Installing runner agent..."
+
+            az vm run-command invoke \
+              --resource-group "$RG" \
+              --name "$RUNNER_NAME" \
+              --command-id RunShellScript \
+              --scripts "
+                set -e
+
+                # Install Node.js 22
+                curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
+                apt-get install -y nodejs jq
+
+                # Create runner user and workspace
+                useradd -m runner
+                mkdir -p /home/runner/actions-runner
+                cd /home/runner/actions-runner
+
+                # Download latest GitHub Actions runner
+                RUNNER_VERSION=\$(curl -s https://api.github.com/repos/actions/runner/releases/latest | jq -r .tag_name | sed 's/v//')
+                curl -sL -o actions-runner.tar.gz https://github.com/actions/runner/releases/download/v\${RUNNER_VERSION}/actions-runner-linux-x64-\${RUNNER_VERSION}.tar.gz
+                tar xzf actions-runner.tar.gz
+                rm actions-runner.tar.gz
+                chown -R runner:runner /home/runner/actions-runner
+
+                # Register as ephemeral runner (auto-deregisters after one job)
+                su - runner -c 'cd /home/runner/actions-runner && ./config.sh \
+                  --url https://github.com/${{ github.repository }} \
+                  --token ${{ steps.token.outputs.reg_token }} \
+                  --name $RUNNER_NAME \
+                  --labels cv-sync \
+                  --ephemeral \
+                  --unattended'
+
+                # Install and start as a systemd service
+                cd /home/runner/actions-runner
+                ./svc.sh install runner
+                ./svc.sh start
+
+                # Schedule auto-shutdown as safety net
+                shutdown -P +${MAX_MINUTES} 'Auto-shutdown: max_hours reached'
+              "
+
+            echo "runner_name=$RUNNER_NAME" >> "$GITHUB_OUTPUT"
+            echo "Runner $RUNNER_NAME is online with label 'cv-sync'"
+
+      - name: Job summary
+        run: |
+          cat >> "$GITHUB_STEP_SUMMARY" <<EOF
+          ## Runner Provisioned
+
+          | Setting | Value |
+          |---------|-------|
+          | **VM name** | \`${{ steps.vm.outputs.runner_name }}\` |
+          | **Size** | ${{ inputs.vm_size }} |
+          | **Disk** | ${{ inputs.disk_size_gb }} GB |
+          | **Auto-shutdown** | ${{ inputs.max_hours }} hours |
+          | **Runner label** | \`cv-sync\` |
+
+          **Next:** trigger the **CV: Dataset Sync** workflow.
+          EOF
