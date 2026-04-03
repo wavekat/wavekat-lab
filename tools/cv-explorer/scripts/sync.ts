@@ -170,6 +170,11 @@ async function downloadDataset(): Promise<string> {
       }
 
       const dlRes = await fetch(data.downloadUrl, { headers });
+      if (dlRes.status === 416) {
+        // Range not satisfiable — file is already fully downloaded
+        console.log("Archive already downloaded (server returned 416), skipping.");
+        break;
+      }
       if (!dlRes.ok && dlRes.status !== 206) {
         console.error(`Download failed: ${dlRes.status}`);
         process.exit(1);
