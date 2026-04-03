@@ -157,29 +157,59 @@ async function downloadDataset(): Promise<string> {
     }
   }
 
-  const dlRes = await fetch(data.downloadUrl);
-  if (!dlRes.ok || !dlRes.body) {
-    console.error(`Download failed: ${dlRes.status}`);
-    process.exit(1);
-  }
+  const MAX_RETRIES = 10;
+  let downloaded = existsSync(archivePath) ? statSync(archivePath).size : 0;
 
-  const fileStream = createWriteStream(archivePath);
-  const body = Readable.fromWeb(dlRes.body as import("node:stream/web").ReadableStream);
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    try {
+      const headers: Record<string, string> = {};
+      if (downloaded > 0) {
+        headers["Range"] = `bytes=${downloaded}-`;
+        console.log(`Resuming from ${(downloaded / 1024 / 1024).toFixed(0)} MB (attempt ${attempt + 1})...`);
+      }
 
-  let downloaded = 0;
-  let lastLog = 0;
-  body.on("data", (chunk: Buffer) => {
-    downloaded += chunk.length;
-    const now = Date.now();
-    if (now - lastLog > 5000) {
-      const pct = ((downloaded / data.sizeBytes) * 100).toFixed(1);
-      console.log(`  ${pct}% (${(downloaded / 1024 / 1024).toFixed(0)} MB)`);
-      lastLog = now;
+      const dlRes = await fetch(data.downloadUrl, { headers });
+      if (!dlRes.ok && dlRes.status !== 206) {
+        console.error(`Download failed: ${dlRes.status}`);
+        process.exit(1);
+      }
+      if (!dlRes.body) {
+        console.error("Download response has no body");
+        process.exit(1);
+      }
+
+      const fileStream = createWriteStream(archivePath, {
+        flags: downloaded > 0 ? "a" : "w",
+      });
+      const body = Readable.fromWeb(dlRes.body as import("node:stream/web").ReadableStream);
+
+      let lastLog = 0;
+      body.on("data", (chunk: Buffer) => {
+        downloaded += chunk.length;
+        const now = Date.now();
+        if (now - lastLog > 5000) {
+          const pct = ((downloaded / data.sizeBytes) * 100).toFixed(1);
+          console.log(`  ${pct}% (${(downloaded / 1024 / 1024).toFixed(0)} MB)`);
+          lastLog = now;
+        }
+      });
+
+      await pipeline(body, fileStream);
+      console.log("Download complete.");
+      break;
+    } catch (err) {
+      console.error(`Download interrupted: ${err instanceof Error ? err.message : err}`);
+      downloaded = existsSync(archivePath) ? statSync(archivePath).size : 0;
+      if (attempt < MAX_RETRIES - 1) {
+        const delay = Math.min(5000 * (attempt + 1), 30000);
+        console.log(`Retrying in ${delay / 1000}s...`);
+        await new Promise((r) => setTimeout(r, delay));
+      } else {
+        console.error("Max retries reached, download failed.");
+        process.exit(1);
+      }
     }
-  });
-
-  await pipeline(body, fileStream);
-  console.log("Download complete.");
+  }
   return archivePath;
 }
 
