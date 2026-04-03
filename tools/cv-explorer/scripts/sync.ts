@@ -5,7 +5,9 @@
  * parses TSV metadata into Cloudflare D1, and uploads MP3 clips to R2.
  *
  * Usage:
- *   npx tsx sync.ts --locale en --split validated --dataset-id <id>
+ *   npx tsx sync.ts --dataset-id <id> --split validated
+ *   npx tsx sync.ts --dataset-id <id> --split all
+ *   npx tsx sync.ts --dataset-id <id> --split all --force
  *
  * Environment variables:
  *   DATACOLLECTIVE_API_KEY  — Mozilla Data Collective API key
@@ -40,8 +42,7 @@ import { S3Client, PutObjectCommand, HeadObjectCommand } from "@aws-sdk/client-s
 
 const { values: args } = parseArgs({
   options: {
-    locale: { type: "string", default: "en" },
-    split: { type: "string", default: "validated" },
+    split: { type: "string", default: "all" },
     "dataset-id": { type: "string" },
     "work-dir": { type: "string", default: "/tmp/cv-sync" },
     "r2-concurrency": { type: "string", default: "20" },
@@ -49,11 +50,11 @@ const { values: args } = parseArgs({
     "skip-download": { type: "boolean", default: false },
     "skip-d1": { type: "boolean", default: false },
     "skip-r2": { type: "boolean", default: false },
+    force: { type: "boolean", default: false },
   },
 });
 
-const LOCALE = args.locale!;
-const SPLIT = args.split!;
+const SPLIT_ARG = args.split!;
 const DATASET_ID = args["dataset-id"];
 const WORK_DIR = args["work-dir"]!;
 const R2_CONCURRENCY = parseInt(args["r2-concurrency"]!, 10);
@@ -61,6 +62,7 @@ const D1_BATCH_SIZE = parseInt(args["d1-batch-size"]!, 10);
 const SKIP_DOWNLOAD = args["skip-download"]!;
 const SKIP_D1 = args["skip-d1"]!;
 const SKIP_R2 = args["skip-r2"]!;
+const FORCE = args.force!;
 
 // ---------------------------------------------------------------------------
 // Environment
@@ -194,14 +196,18 @@ function extractArchive(archivePath: string): string {
 // Step 3: Find extracted files
 // ---------------------------------------------------------------------------
 
-interface DatasetPaths {
-  tsvPath: string;
+interface DatasetInfo {
+  version: string;
+  locale: string;
+  splits: string[];
+  localeDir: string;
   clipsDir: string;
 }
 
-function findDatasetPaths(extractDir: string): DatasetPaths {
+const KNOWN_SPLITS = ["validated", "train", "dev", "test", "invalidated", "other"];
+
+function detectDatasetInfo(extractDir: string): DatasetInfo {
   // Archive structure: cv-corpus-VERSION/LOCALE/split.tsv and clips/
-  // Find the top-level directory
   const topDirs = readdirSync(extractDir).filter((f) =>
     statSync(join(extractDir, f)).isDirectory()
   );
@@ -211,33 +217,53 @@ function findDatasetPaths(extractDir: string): DatasetPaths {
     process.exit(1);
   }
 
-  // Try direct path first: extractDir/cv-corpus-*/LOCALE/
-  for (const topDir of topDirs) {
-    const localeDir = join(extractDir, topDir, LOCALE);
-    if (existsSync(localeDir)) {
-      const tsvPath = join(localeDir, `${SPLIT}.tsv`);
-      const clipsDir = join(localeDir, "clips");
+  // Find the version directory (e.g. cv-corpus-25.0-2026-03-09)
+  const version = topDirs[0];
+  const versionDir = join(extractDir, version);
 
-      if (!existsSync(tsvPath)) {
-        console.error(`TSV file not found: ${tsvPath}`);
-        console.error(`Available files: ${readdirSync(localeDir).join(", ")}`);
-        process.exit(1);
-      }
+  // Auto-detect locale: find the single subdirectory inside the version dir
+  const localeDirs = readdirSync(versionDir).filter((f) =>
+    statSync(join(versionDir, f)).isDirectory()
+  );
 
-      if (!existsSync(clipsDir)) {
-        console.error(`Clips directory not found: ${clipsDir}`);
-        process.exit(1);
-      }
-
-      console.log(`Found TSV: ${tsvPath}`);
-      console.log(`Found clips: ${clipsDir}`);
-      return { tsvPath, clipsDir };
-    }
+  if (localeDirs.length === 0) {
+    console.error(`No locale directory found in ${versionDir}`);
+    process.exit(1);
   }
 
-  console.error(`Could not find locale '${LOCALE}' in extracted archive.`);
-  console.error(`Top-level dirs: ${topDirs.join(", ")}`);
-  process.exit(1);
+  const locale = localeDirs[0];
+  const localeDir = join(versionDir, locale);
+  const clipsDir = join(localeDir, "clips");
+
+  if (!existsSync(clipsDir)) {
+    console.error(`Clips directory not found: ${clipsDir}`);
+    process.exit(1);
+  }
+
+  // Find available splits
+  const availableSplits = readdirSync(localeDir)
+    .filter((f) => f.endsWith(".tsv"))
+    .map((f) => f.replace(/\.tsv$/, ""))
+    .filter((s) => KNOWN_SPLITS.includes(s));
+
+  // Determine which splits to process
+  let splits: string[];
+  if (SPLIT_ARG === "all") {
+    splits = availableSplits;
+  } else {
+    if (!availableSplits.includes(SPLIT_ARG)) {
+      console.error(`Split '${SPLIT_ARG}' not found. Available: ${availableSplits.join(", ")}`);
+      process.exit(1);
+    }
+    splits = [SPLIT_ARG];
+  }
+
+  console.log(`Detected version: ${version}`);
+  console.log(`Detected locale: ${locale}`);
+  console.log(`Splits to sync: ${splits.join(", ")}`);
+  console.log(`Clips dir: ${clipsDir}`);
+
+  return { version, locale, splits, localeDir, clipsDir };
 }
 
 // ---------------------------------------------------------------------------
@@ -257,7 +283,7 @@ interface Clip {
   accent: string;
 }
 
-function parseTsv(tsvPath: string): Clip[] {
+function parseTsv(tsvPath: string, locale: string): Clip[] {
   console.log("Parsing TSV...");
   const content = readFileSync(tsvPath, "utf-8");
   const lines = content.split("\n").filter((l) => l.trim());
@@ -315,7 +341,7 @@ function parseTsv(tsvPath: string): Clip[] {
 
     clips.push({
       id: filename.replace(/\.mp3$/, ""),
-      path: `${LOCALE}/clips/${filename}`,
+      path: `${locale}/clips/${filename}`,
       sentence,
       wordCount: words.length,
       charCount: sentence.length,
@@ -335,11 +361,27 @@ function parseTsv(tsvPath: string): Clip[] {
 // Step 5: Insert into D1
 // ---------------------------------------------------------------------------
 
-async function createD1Table(): Promise<void> {
-  console.log("Creating D1 table if not exists...");
+async function createD1Tables(): Promise<void> {
+  console.log("Creating D1 tables if not exists...");
+
+  await d1Query(`
+    CREATE TABLE IF NOT EXISTS datasets (
+      id          TEXT PRIMARY KEY,
+      dataset_id  TEXT NOT NULL,
+      version     TEXT NOT NULL,
+      locale      TEXT NOT NULL,
+      split       TEXT NOT NULL,
+      clip_count  INTEGER DEFAULT 0,
+      size_bytes  INTEGER DEFAULT 0,
+      status      TEXT NOT NULL,
+      synced_at   TEXT
+    )
+  `);
+
   await d1Query(`
     CREATE TABLE IF NOT EXISTS clips (
       id         TEXT PRIMARY KEY,
+      version    TEXT NOT NULL,
       locale     TEXT NOT NULL,
       split      TEXT NOT NULL,
       path       TEXT NOT NULL,
@@ -354,16 +396,17 @@ async function createD1Table(): Promise<void> {
     )
   `);
 
-  // Create indices (IF NOT EXISTS is implicit for CREATE INDEX IF NOT EXISTS)
   const indices = [
+    "CREATE INDEX IF NOT EXISTS idx_datasets_status ON datasets(status)",
     "CREATE INDEX IF NOT EXISTS idx_clips_locale_split ON clips(locale, split)",
+    "CREATE INDEX IF NOT EXISTS idx_clips_version ON clips(version, locale, split)",
     "CREATE INDEX IF NOT EXISTS idx_clips_word_count ON clips(word_count)",
     "CREATE INDEX IF NOT EXISTS idx_clips_char_count ON clips(char_count)",
   ];
   for (const sql of indices) {
     await d1Query(sql);
   }
-  console.log("D1 table ready.");
+  console.log("D1 tables ready.");
 }
 
 async function d1Query(sql: string, params: unknown[] = []): Promise<unknown> {
@@ -387,8 +430,13 @@ async function d1Query(sql: string, params: unknown[] = []): Promise<unknown> {
   return res.json();
 }
 
-async function d1BatchInsert(clips: Clip[]): Promise<void> {
-  const sql = `INSERT OR IGNORE INTO clips (id, locale, split, path, sentence, word_count, char_count, up_votes, down_votes, age, gender, accent) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+async function d1BatchInsert(
+  clips: Clip[],
+  version: string,
+  locale: string,
+  split: string,
+): Promise<void> {
+  const sql = `INSERT OR IGNORE INTO clips (id, version, locale, split, path, sentence, word_count, char_count, up_votes, down_votes, age, gender, accent) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
 
   let inserted = 0;
 
@@ -399,8 +447,9 @@ async function d1BatchInsert(clips: Clip[]): Promise<void> {
       sql,
       params: [
         clip.id,
-        LOCALE,
-        SPLIT,
+        version,
+        locale,
+        split,
         clip.path,
         clip.sentence,
         clip.wordCount,
@@ -437,10 +486,22 @@ async function d1BatchInsert(clips: Clip[]): Promise<void> {
   }
 }
 
-async function insertIntoD1(clips: Clip[]): Promise<void> {
-  console.log(`Inserting ${clips.length} clips into D1...`);
-  await createD1Table();
-  await d1BatchInsert(clips);
+async function insertIntoD1(
+  clips: Clip[],
+  version: string,
+  locale: string,
+  split: string,
+): Promise<void> {
+  console.log(`Inserting ${clips.length} clips into D1 (${version}/${locale}/${split})...`);
+
+  // Clean slate: delete existing rows for this version/locale/split
+  console.log(`  Deleting existing rows for ${version}/${locale}/${split}...`);
+  await d1Query(
+    "DELETE FROM clips WHERE version = ? AND locale = ? AND split = ?",
+    [version, locale, split],
+  );
+
+  await d1BatchInsert(clips, version, locale, split);
   console.log("D1 insert complete.");
 }
 
@@ -522,17 +583,57 @@ async function uploadToR2(clips: Clip[], clipsDir: string): Promise<void> {
 // Main
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Datasets registry helpers
+// ---------------------------------------------------------------------------
+
+function datasetKey(version: string, locale: string, split: string): string {
+  return `${version}/${locale}/${split}`;
+}
+
+async function getDatasetStatus(key: string): Promise<string | null> {
+  const res = (await d1Query(
+    "SELECT status FROM datasets WHERE id = ?",
+    [key],
+  )) as { result: Array<{ results: Array<{ status: string }> }> };
+  const rows = res?.result?.[0]?.results;
+  return rows?.length ? rows[0].status : null;
+}
+
+async function upsertDataset(
+  key: string,
+  datasetId: string,
+  version: string,
+  locale: string,
+  split: string,
+  status: string,
+  clipCount = 0,
+  sizeBytes = 0,
+): Promise<void> {
+  await d1Query(
+    `INSERT OR REPLACE INTO datasets (id, dataset_id, version, locale, split, clip_count, size_bytes, status, synced_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [key, datasetId, version, locale, split, clipCount, sizeBytes, status,
+     status === "synced" ? new Date().toISOString() : null],
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Main
+// ---------------------------------------------------------------------------
+
 async function main(): Promise<void> {
   console.log("=== Common Voice Dataset Sync ===");
-  console.log(`Locale: ${LOCALE}`);
-  console.log(`Split: ${SPLIT}`);
+  console.log(`Split: ${SPLIT_ARG}`);
   console.log(`Work dir: ${WORK_DIR}`);
   console.log();
+
+  // Create tables first (needed for status check)
+  await createD1Tables();
 
   // Step 1: Download
   let archivePath: string;
   if (SKIP_DOWNLOAD) {
-    // Find existing archive in work dir
     const files = existsSync(WORK_DIR)
       ? readdirSync(WORK_DIR).filter((f) => f.endsWith(".tar.gz"))
       : [];
@@ -555,30 +656,68 @@ async function main(): Promise<void> {
     extractArchive(archivePath);
   }
 
-  // Step 3: Find files
-  const { tsvPath, clipsDir } = findDatasetPaths(extractDir);
+  // Step 3: Auto-detect version, locale, and splits
+  const info = detectDatasetInfo(extractDir);
+  let totalClips = 0;
 
-  // Step 4: Parse TSV
-  const clips = parseTsv(tsvPath);
+  // Step 4: Process each split
+  for (const split of info.splits) {
+    console.log();
+    console.log(`--- Syncing split: ${split} ---`);
 
-  // Step 5: Insert into D1
-  if (SKIP_D1) {
-    console.log("Skipping D1 insert (--skip-d1).");
-  } else {
-    await insertIntoD1(clips);
-  }
+    const key = datasetKey(info.version, info.locale, split);
 
-  // Step 6: Upload to R2
-  if (SKIP_R2) {
-    console.log("Skipping R2 upload (--skip-r2).");
-  } else {
-    await uploadToR2(clips, clipsDir);
+    // Check if already synced
+    if (!FORCE) {
+      const status = await getDatasetStatus(key);
+      if (status === "synced") {
+        console.log(`Already synced (${key}). Use --force to re-sync.`);
+        continue;
+      }
+    }
+
+    // Mark as syncing
+    await upsertDataset(key, DATASET_ID!, info.version, info.locale, split, "syncing");
+
+    try {
+      const tsvPath = join(info.localeDir, `${split}.tsv`);
+      const clips = parseTsv(tsvPath, info.locale);
+
+      // Insert into D1
+      if (SKIP_D1) {
+        console.log("Skipping D1 insert (--skip-d1).");
+      } else {
+        await insertIntoD1(clips, info.version, info.locale, split);
+      }
+
+      // Upload to R2
+      if (SKIP_R2) {
+        console.log("Skipping R2 upload (--skip-r2).");
+      } else {
+        await uploadToR2(clips, info.clipsDir);
+      }
+
+      // Mark as synced
+      await upsertDataset(
+        key, DATASET_ID!, info.version, info.locale, split, "synced",
+        clips.length, statSync(archivePath).size,
+      );
+
+      totalClips += clips.length;
+    } catch (err) {
+      // Mark as failed
+      await upsertDataset(key, DATASET_ID!, info.version, info.locale, split, "failed");
+      throw err;
+    }
   }
 
   // Summary
   console.log();
   console.log("=== Sync Complete ===");
-  console.log(`Clips processed: ${clips.length}`);
+  console.log(`Version: ${info.version}`);
+  console.log(`Locale: ${info.locale}`);
+  console.log(`Splits: ${info.splits.join(", ")}`);
+  console.log(`Total clips processed: ${totalClips}`);
 }
 
 main().catch((err) => {
