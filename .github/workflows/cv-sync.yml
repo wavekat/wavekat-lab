@@ -4,13 +4,30 @@ on:
   workflow_dispatch:
     inputs:
       locale:
-        description: "Common Voice locale (e.g. en, ja, zh-TW)"
+        description: "Common Voice locale"
         required: true
         default: "en"
+        type: choice
+        options:
+          - en        # English
+          - en-AU     # English (Australia)
+          - en-US     # English (US)
+          - ja        # Japanese
+          - zh-TW     # Chinese (Taiwan)
+          - zh-CN     # Chinese (China)
+          - zh-HK     # Chinese (Hong Kong)
       split:
-        description: "Dataset split (validated, train, dev, test)"
+        description: "Dataset split"
         required: true
         default: "validated"
+        type: choice
+        options:
+          - validated
+          - train
+          - dev
+          - test
+          - invalidated
+          - other
       version:
         description: "Common Voice version (e.g. cv-corpus-17.0-2024-03-15)"
         required: true
@@ -39,10 +56,10 @@ jobs:
         working-directory: tools/cv-explorer/scripts
         env:
           DATACOLLECTIVE_API_KEY: ${{ secrets.DATACOLLECTIVE_API_KEY }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           D1_DATABASE_ID: ${{ secrets.CV_EXPLORER_D1_ID }}
-          R2_BUCKET_NAME: ${{ secrets.CV_EXPLORER_R2_BUCKET }}
+          R2_BUCKET_NAME: ${{ vars.CV_EXPLORER_R2_BUCKET }}
 
   cleanup:
     runs-on: ubuntu-latest

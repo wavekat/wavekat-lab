@@ -99,15 +99,69 @@ After sync completes, automatically deletes the VM.
 | `split` | `validated` | Dataset split (`validated`, `train`, `dev`, `test`) |
 | `version` | `cv-corpus-17.0-2024-03-15` | Common Voice version |
 
-### Additional secrets (set up before first sync)
+### Setup guide — before first sync
+
+#### 1. Install Wrangler (Cloudflare CLI)
+
+```bash
+npm install -g wrangler
+
+# Login to Cloudflare
+wrangler login
+```
+
+This opens a browser to authenticate with your Cloudflare account.
+
+#### 2. Create D1 database and R2 bucket
+
+```bash
+# Create the D1 database — note the database ID from the output
+wrangler d1 create cv-explorer
+
+# Create the R2 bucket
+wrangler r2 bucket create cv-explorer
+```
+
+The `d1 create` output will look like:
+
+```
+✅ Successfully created DB 'cv-explorer'
+database_id = "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+```
+
+Use that `database_id` as `CV_EXPLORER_D1_ID`.
+
+#### 3. Create Cloudflare API token
+
+Cloudflare dashboard → My Profile → API Tokens → Create Token → **Create Custom Token**:
+
+Permissions (add all three):
+
+| Scope | Resource | Permission |
+|-------|----------|------------|
+| Account | D1 | Edit |
+| Account | R2 Storage | Edit |
+| Account | Workers Scripts | Edit |
+
+- **Account resources:** Include → your account
+- **Zone resources:** can leave empty (not needed)
+
+#### 4. Configure secrets and variables
+
+**Secrets** (sensitive):
 
 | Secret | Value |
 |--------|-------|
 | `DATACOLLECTIVE_API_KEY` | From datacollective.mozillafoundation.org → Profile → Credentials |
-| `CLOUDFLARE_ACCOUNT_ID` | Cloudflare dashboard → Account ID |
-| `CLOUDFLARE_API_TOKEN` | Cloudflare dashboard → API Tokens (needs D1 + R2) |
-| `CV_EXPLORER_D1_ID` | After running `wrangler d1 create cv-explorer` |
-| `CV_EXPLORER_R2_BUCKET` | After running `wrangler r2 bucket create cv-explorer` |
+| `CLOUDFLARE_API_TOKEN` | The API token created above |
+| `CV_EXPLORER_D1_ID` | Database ID from `wrangler d1 create` output |
+
+**Variables** (non-sensitive):
+
+| Variable | Value |
+|----------|-------|
+| `CLOUDFLARE_ACCOUNT_ID` | Cloudflare dashboard → Overview → Account ID (right sidebar) |
+| `CV_EXPLORER_R2_BUCKET` | Bucket name: `cv-explorer` |
 
 ---
 
@@ -119,4 +173,56 @@ After sync completes, automatically deletes the VM.
 3. Trigger "CV: Dataset Sync" (pick locale, split, version)
 4. Sync runs on the Azure VM
 5. VM is deleted automatically after sync (or shuts down after max_hours)
+```
+
+---
+
+## Useful commands
+
+### Check runner VM status
+
+```bash
+# List all runner VMs
+az vm list --resource-group github-runner-rg --output table
+
+# Check power state of a specific VM
+az vm get-instance-view \
+  --resource-group github-runner-rg \
+  --name cv-sync-1775172573 \
+  --query "instanceView.statuses[1].displayStatus" \
+  --output tsv
+# Output: "VM running", "VM deallocated", "VM stopped", etc.
+
+# Check the scheduled auto-shutdown inside the VM
+az vm run-command invoke \
+  --resource-group github-runner-rg \
+  --name cv-sync-1775172573 \
+  --command-id RunShellScript \
+  --scripts "shutdown --show"
+```
+
+### Manually stop or delete a VM
+
+```bash
+# Stop (deallocate) — stops billing for compute, keeps the disk
+az vm deallocate \
+  --resource-group github-runner-rg \
+  --name cv-sync-1775172573
+
+# Delete — removes VM, disk, and NIC entirely
+az vm delete \
+  --resource-group github-runner-rg \
+  --name cv-sync-1775172573 \
+  --yes --force-deletion true
+
+# Delete ALL runner VMs in the resource group
+az vm list --resource-group github-runner-rg --query "[?starts_with(name, 'cv-sync-')].name" -o tsv | \
+  xargs -I {} az vm delete --resource-group github-runner-rg --name {} --yes --force-deletion true
+```
+
+### Check GitHub runner registration
+
+```bash
+# List registered runners (requires GH_TOKEN or gh auth login)
+gh api /repos/{owner}/{repo}/actions/runners --jq '.runners[] | {name, status, labels: [.labels[].name]}'
 ```
