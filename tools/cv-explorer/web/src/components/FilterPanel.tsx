@@ -134,19 +134,19 @@ export function FilterPanel({
         </div>
       </div>
 
-      {/* Word count range */}
+      {/* Character length range */}
       <div className="flex flex-col gap-1.5">
-        <Label>Word count</Label>
+        <Label>Sentence length</Label>
         <div className="flex items-center gap-2">
           <Input
             type="number"
             placeholder="Min"
             min={0}
-            value={filters.min_words ?? ""}
+            value={filters.min_chars ?? ""}
             onChange={(e) =>
               onFiltersChange({
                 ...filters,
-                min_words: e.target.value ? parseInt(e.target.value, 10) : undefined,
+                min_chars: e.target.value ? parseInt(e.target.value, 10) : undefined,
               })
             }
             className="w-20"
@@ -156,11 +156,11 @@ export function FilterPanel({
             type="number"
             placeholder="Max"
             min={0}
-            value={filters.max_words ?? ""}
+            value={filters.max_chars ?? ""}
             onChange={(e) =>
               onFiltersChange({
                 ...filters,
-                max_words: e.target.value ? parseInt(e.target.value, 10) : undefined,
+                max_chars: e.target.value ? parseInt(e.target.value, 10) : undefined,
               })
             }
             className="w-20"

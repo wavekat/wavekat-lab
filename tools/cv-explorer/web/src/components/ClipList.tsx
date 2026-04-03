@@ -57,7 +57,7 @@ export function ClipList({
             <TableHeader>
               <TableRow>
                 <TableHead className="w-[50%]">Sentence</TableHead>
-                <TableHead className="w-16 text-right">Words</TableHead>
+                <TableHead className="w-16 text-right">Length</TableHead>
                 <TableHead className="w-20">Gender</TableHead>
                 <TableHead className="w-20">Age</TableHead>
                 <TableHead className="w-12 text-right">+</TableHead>
@@ -76,7 +76,7 @@ export function ClipList({
                     {clip.sentence}
                   </TableCell>
                   <TableCell className="text-right tabular-nums">
-                    {clip.word_count}
+                    {clip.char_count}
                   </TableCell>
                   <TableCell className="text-xs text-muted-foreground">
                     {clip.gender || "\u2014"}

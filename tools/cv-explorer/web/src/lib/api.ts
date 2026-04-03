@@ -39,8 +39,8 @@ export interface Filters {
   locale: string;
   split: string;
   q?: string;
-  min_words?: number;
-  max_words?: number;
+  min_chars?: number;
+  max_chars?: number;
   gender?: string;
   age?: string;
   has_audio?: string;
@@ -93,10 +93,10 @@ export async function fetchClips(
   params.set("locale", filters.locale);
   params.set("split", filters.split);
   if (filters.q) params.set("q", filters.q);
-  if (filters.min_words !== undefined)
-    params.set("min_words", String(filters.min_words));
-  if (filters.max_words !== undefined)
-    params.set("max_words", String(filters.max_words));
+  if (filters.min_chars !== undefined)
+    params.set("min_chars", String(filters.min_chars));
+  if (filters.max_chars !== undefined)
+    params.set("max_chars", String(filters.max_chars));
   if (filters.gender) params.set("gender", filters.gender);
   if (filters.age) params.set("age", filters.age);
   if (filters.has_audio) params.set("has_audio", filters.has_audio);
