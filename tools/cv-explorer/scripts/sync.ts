@@ -30,6 +30,7 @@ import {
   mkdirSync,
 } from "node:fs";
 import { join, basename } from "node:path";
+import { createInterface } from "node:readline";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { parseArgs } from "node:util";
@@ -322,56 +323,67 @@ interface Clip {
   accent: string;
 }
 
-function parseTsv(tsvPath: string, locale: string): Clip[] {
+async function parseTsv(tsvPath: string, locale: string): Promise<Clip[]> {
   console.log("Parsing TSV...");
-  const content = readFileSync(tsvPath, "utf-8");
-  const lines = content.split("\n").filter((l) => l.trim());
 
-  if (lines.length === 0) {
-    console.error("TSV file is empty");
-    process.exit(1);
-  }
+  const rl = createInterface({
+    input: createReadStream(tsvPath, { encoding: "utf-8" }),
+    crlfDelay: Infinity,
+  });
 
-  // Parse header to find column indices
-  const header = lines[0].split("\t");
-  const col = (name: string): number => {
-    const idx = header.indexOf(name);
-    if (idx === -1) {
-      // Try common alternatives
-      const alternatives: Record<string, string[]> = {
-        accents: ["accent", "accents"],
-        path: ["path"],
-        sentence: ["sentence"],
-        up_votes: ["up_votes"],
-        down_votes: ["down_votes"],
-        age: ["age"],
-        gender: ["gender"],
-      };
-      for (const alt of alternatives[name] ?? []) {
-        const altIdx = header.indexOf(alt);
-        if (altIdx !== -1) return altIdx;
-      }
-    }
-    return idx;
-  };
-
-  const pathIdx = col("path");
-  const sentenceIdx = col("sentence");
-  const upVotesIdx = col("up_votes");
-  const downVotesIdx = col("down_votes");
-  const ageIdx = col("age");
-  const genderIdx = col("gender");
-  const accentIdx = col("accents");
-
-  if (pathIdx === -1 || sentenceIdx === -1) {
-    console.error(`Required columns missing. Header: ${header.join(", ")}`);
-    process.exit(1);
-  }
+  let header: string[] | null = null;
+  let pathIdx = -1;
+  let sentenceIdx = -1;
+  let upVotesIdx = -1;
+  let downVotesIdx = -1;
+  let ageIdx = -1;
+  let genderIdx = -1;
+  let accentIdx = -1;
 
   const clips: Clip[] = [];
 
-  for (let i = 1; i < lines.length; i++) {
-    const cols = lines[i].split("\t");
+  for await (const line of rl) {
+    if (!line.trim()) continue;
+
+    if (!header) {
+      header = line.split("\t");
+
+      const col = (name: string): number => {
+        const idx = header!.indexOf(name);
+        if (idx === -1) {
+          const alternatives: Record<string, string[]> = {
+            accents: ["accent", "accents"],
+            path: ["path"],
+            sentence: ["sentence"],
+            up_votes: ["up_votes"],
+            down_votes: ["down_votes"],
+            age: ["age"],
+            gender: ["gender"],
+          };
+          for (const alt of alternatives[name] ?? []) {
+            const altIdx = header!.indexOf(alt);
+            if (altIdx !== -1) return altIdx;
+          }
+        }
+        return idx;
+      };
+
+      pathIdx = col("path");
+      sentenceIdx = col("sentence");
+      upVotesIdx = col("up_votes");
+      downVotesIdx = col("down_votes");
+      ageIdx = col("age");
+      genderIdx = col("gender");
+      accentIdx = col("accents");
+
+      if (pathIdx === -1 || sentenceIdx === -1) {
+        console.error(`Required columns missing. Header: ${header.join(", ")}`);
+        process.exit(1);
+      }
+      continue;
+    }
+
+    const cols = line.split("\t");
     const filename = cols[pathIdx];
     if (!filename) continue;
 
@@ -390,6 +402,11 @@ function parseTsv(tsvPath: string, locale: string): Clip[] {
       gender: cols[genderIdx] ?? "",
       accent: cols[accentIdx] ?? "",
     });
+  }
+
+  if (!header) {
+    console.error("TSV file is empty");
+    process.exit(1);
   }
 
   console.log(`Parsed ${clips.length} clips from TSV.`);
@@ -874,7 +891,7 @@ async function main(): Promise<void> {
 
     try {
       const tsvPath = join(info.localeDir, `${split}.tsv`);
-      const clips = parseTsv(tsvPath, info.locale);
+      const clips = await parseTsv(tsvPath, info.locale);
 
       // Insert into D1
       if (SKIP_D1) {
