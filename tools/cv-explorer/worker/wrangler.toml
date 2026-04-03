@@ -1,0 +1,15 @@
+name = "cv-explorer-api"
+main = "src/index.ts"
+compatibility_date = "2025-04-01"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "cv-explorer"
+database_id = "011e608e-6925-4f6d-ae88-e4ecfb92df29"
+migrations_dir = "migrations"
+remote = true
+
+[[r2_buckets]]
+binding = "AUDIO"
+bucket_name = "cv-explorer"
+remote = true
