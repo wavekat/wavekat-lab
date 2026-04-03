@@ -28,10 +28,9 @@ on:
           - test
           - invalidated
           - other
-      version:
-        description: "Common Voice version (e.g. cv-corpus-17.0-2024-03-15)"
+      dataset_id:
+        description: "Data Collective dataset ID (from URL on datacollective.mozillafoundation.org)"
         required: true
-        default: "cv-corpus-17.0-2024-03-15"
 
 jobs:
   sync:
@@ -52,13 +51,15 @@ jobs:
           npx tsx sync.ts \
             --locale "${{ inputs.locale }}" \
             --split "${{ inputs.split }}" \
-            --version "${{ inputs.version }}"
+            --dataset-id "${{ inputs.dataset_id }}"
         working-directory: tools/cv-explorer/scripts
         env:
           DATACOLLECTIVE_API_KEY: ${{ secrets.DATACOLLECTIVE_API_KEY }}
           CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           D1_DATABASE_ID: ${{ secrets.CV_EXPLORER_D1_ID }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
           R2_BUCKET_NAME: ${{ vars.CV_EXPLORER_R2_BUCKET }}
 
   cleanup:
@@ -102,7 +103,7 @@ jobs:
           |---------|-------|
           | **Locale** | \`${{ inputs.locale }}\` |
           | **Split** | \`${{ inputs.split }}\` |
-          | **Version** | \`${{ inputs.version }}\` |
+          | **Dataset ID** | \`${{ inputs.dataset_id }}\` |
 
           Runner VM has been cleaned up.
           EOF

@@ -1,0 +1,16 @@
+{
+  "name": "cv-explorer-scripts",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "sync": "tsx sync.ts"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.800.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.8.0"
+  }
+}

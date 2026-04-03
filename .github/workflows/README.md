@@ -97,7 +97,7 @@ After sync completes, automatically deletes the VM.
 |-------|---------|-------------|
 | `locale` | `en` | Common Voice locale (e.g. `en`, `ja`, `zh-TW`) |
 | `split` | `validated` | Dataset split (`validated`, `train`, `dev`, `test`) |
-| `version` | `cv-corpus-17.0-2024-03-15` | Common Voice version |
+| `dataset_id` | *(required)* | Data Collective dataset ID (from the dataset URL) |
 
 ### Setup guide — before first sync
 
@@ -146,15 +146,26 @@ Permissions (add all three):
 - **Account resources:** Include → your account
 - **Zone resources:** can leave empty (not needed)
 
-#### 4. Configure secrets and variables
+#### 4. Create R2 API token (S3-compatible)
+
+Cloudflare dashboard → Storage & Databases → R2 → **Manage R2 API Tokens** → Create API token:
+- **Permissions:** Object Read & Write
+- **Bucket:** Apply to specific bucket → `cv-explorer`
+
+This gives you an **Access Key ID** and **Secret Access Key** — these are separate from the
+Cloudflare API token and are used for S3-compatible uploads.
+
+#### 5. Configure secrets and variables
 
 **Secrets** (sensitive):
 
 | Secret | Value |
 |--------|-------|
 | `DATACOLLECTIVE_API_KEY` | From datacollective.mozillafoundation.org → Profile → Credentials |
-| `CLOUDFLARE_API_TOKEN` | The API token created above |
+| `CLOUDFLARE_API_TOKEN` | The API token from step 3 (for D1) |
 | `CV_EXPLORER_D1_ID` | Database ID from `wrangler d1 create` output |
+| `R2_ACCESS_KEY_ID` | R2 API token Access Key ID from step 4 |
+| `R2_SECRET_ACCESS_KEY` | R2 API token Secret Access Key from step 4 |
 
 **Variables** (non-sensitive):
 
