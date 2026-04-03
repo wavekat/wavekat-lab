@@ -462,9 +462,9 @@ async function d1BatchInsert(
   split: string,
 ): Promise<void> {
   const COLS = 13;
-  const ROWS_PER_STMT = Math.floor(999 / COLS); // 76 rows per statement (SQLite param limit)
+  const ROWS_PER_STMT = Math.floor(100 / COLS); // 7 rows per statement (D1 param limit)
   const STMTS_PER_BATCH = 100; // D1 API limit
-  const ROWS_PER_BATCH = ROWS_PER_STMT * STMTS_PER_BATCH; // ~7600 rows per API call
+  const ROWS_PER_BATCH = ROWS_PER_STMT * STMTS_PER_BATCH; // 700 rows per API call
 
   const placeholderRow = `(${Array(COLS).fill("?").join(", ")})`;
 
