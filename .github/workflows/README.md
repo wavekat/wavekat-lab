@@ -148,12 +148,17 @@ Permissions (add all three):
 
 #### 4. Create R2 API token (S3-compatible)
 
+> **Note:** R2 S3-compatible tokens can only be created via the Cloudflare dashboard —
+> there is no `wrangler` command for this.
+
 Cloudflare dashboard → Storage & Databases → R2 → **Manage R2 API Tokens** → Create API token:
+- **Token name:** `cv-explorer-sync`
 - **Permissions:** Object Read & Write
 - **Bucket:** Apply to specific bucket → `cv-explorer`
 
-This gives you an **Access Key ID** and **Secret Access Key** — these are separate from the
-Cloudflare API token and are used for S3-compatible uploads.
+After creating, you'll see an **Access Key ID** and **Secret Access Key**. Copy both
+immediately — the secret is only shown once. These are separate from the Cloudflare API
+token and are used for S3-compatible uploads to R2.
 
 #### 5. Configure secrets and variables
 
