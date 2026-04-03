@@ -461,32 +461,40 @@ async function d1BatchInsert(
   locale: string,
   split: string,
 ): Promise<void> {
-  const sql = `INSERT OR IGNORE INTO clips (id, version, locale, split, path, sentence, word_count, char_count, up_votes, down_votes, age, gender, accent) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+  const COLS = 13;
+  const ROWS_PER_STMT = Math.floor(999 / COLS); // 76 rows per statement (SQLite param limit)
+  const STMTS_PER_BATCH = 100; // D1 API limit
+  const ROWS_PER_BATCH = ROWS_PER_STMT * STMTS_PER_BATCH; // ~7600 rows per API call
+
+  const placeholderRow = `(${Array(COLS).fill("?").join(", ")})`;
+
+  function buildMultiRowSql(rowCount: number): string {
+    return `INSERT OR IGNORE INTO clips (id, version, locale, split, path, sentence, word_count, char_count, up_votes, down_votes, age, gender, accent) VALUES ${Array(rowCount).fill(placeholderRow).join(", ")}`;
+  }
+
+  function clipParams(clip: Clip): unknown[] {
+    return [
+      clip.id, version, locale, split, clip.path, clip.sentence,
+      clip.wordCount, clip.charCount, clip.upVotes, clip.downVotes,
+      clip.age, clip.gender, clip.accent,
+    ];
+  }
 
   let inserted = 0;
   const startTime = Date.now();
 
-  for (let i = 0; i < clips.length; i += D1_BATCH_SIZE) {
-    const batch = clips.slice(i, i + D1_BATCH_SIZE);
+  for (let i = 0; i < clips.length; i += ROWS_PER_BATCH) {
+    const batchClips = clips.slice(i, i + ROWS_PER_BATCH);
+    const statements: { sql: string; params: unknown[] }[] = [];
 
-    const statements = batch.map((clip) => ({
-      sql,
-      params: [
-        clip.id,
-        version,
-        locale,
-        split,
-        clip.path,
-        clip.sentence,
-        clip.wordCount,
-        clip.charCount,
-        clip.upVotes,
-        clip.downVotes,
-        clip.age,
-        clip.gender,
-        clip.accent,
-      ],
-    }));
+    // Split into chunks of ROWS_PER_STMT for each statement
+    for (let j = 0; j < batchClips.length; j += ROWS_PER_STMT) {
+      const chunk = batchClips.slice(j, j + ROWS_PER_STMT);
+      statements.push({
+        sql: buildMultiRowSql(chunk.length),
+        params: chunk.flatMap(clipParams),
+      });
+    }
 
     const res = await fetch(
       `https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/d1/database/${D1_DATABASE_ID}/query`,
@@ -505,8 +513,8 @@ async function d1BatchInsert(
       throw new Error(`D1 batch insert failed (${res.status}): ${body}`);
     }
 
-    inserted += batch.length;
-    if (inserted % 1000 === 0 || inserted === clips.length) {
+    inserted += batchClips.length;
+    if (inserted % 1000 <= ROWS_PER_BATCH || inserted === clips.length) {
       const elapsed = (Date.now() - startTime) / 1000;
       const rate = inserted / elapsed;
       const remaining = (clips.length - inserted) / rate;
