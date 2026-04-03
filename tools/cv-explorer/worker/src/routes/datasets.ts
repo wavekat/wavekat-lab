@@ -4,10 +4,11 @@ import type { Env } from "../index";
 export const datasetsRoute = new Hono<Env>()
   .get("/datasets", async (c) => {
     const result = await c.env.DB.prepare(
-      `SELECT id, dataset_id, version, locale, split, clip_count, size_bytes, synced_at
+      `SELECT id, dataset_id, version, locale, split, clip_count, size_bytes, status, synced_at
        FROM datasets
-       WHERE status = 'synced'
-       ORDER BY synced_at DESC`
+       ORDER BY
+         CASE status WHEN 'synced' THEN 0 WHEN 'syncing' THEN 1 ELSE 2 END,
+         synced_at DESC`
     ).all();
 
     return c.json({ datasets: result.results });

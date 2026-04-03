@@ -23,12 +23,13 @@ export const clipsRoute = new Hono<Env>().get("/clips", async (c) => {
   const maxChars = c.req.query("max_chars");
   const gender = c.req.query("gender");
   const age = c.req.query("age");
+  const hasAudio = c.req.query("has_audio");
   const sort = c.req.query("sort") || "id";
   const order = c.req.query("order") || "asc";
   const offset = Math.max(0, parseInt(c.req.query("offset") || "0", 10));
   const limit = Math.min(100, Math.max(1, parseInt(c.req.query("limit") || "50", 10)));
 
-  const conditions: string[] = ["locale = ?", "split = ?", "has_audio = 1"];
+  const conditions: string[] = ["locale = ?", "split = ?"];
   const params: (string | number)[] = [locale, split];
 
   if (version) {
@@ -63,6 +64,11 @@ export const clipsRoute = new Hono<Env>().get("/clips", async (c) => {
     conditions.push("age = ?");
     params.push(age);
   }
+  if (hasAudio === "yes") {
+    conditions.push("has_audio = 1");
+  } else if (hasAudio === "no") {
+    conditions.push("has_audio = 0");
+  }
 
   const where = conditions.join(" AND ");
   const sortCol = VALID_SORTS.has(sort) ? sort : "id";
@@ -75,7 +81,7 @@ export const clipsRoute = new Hono<Env>().get("/clips", async (c) => {
 
   const rows = await db
     .prepare(
-      `SELECT id, sentence, path, word_count, char_count, up_votes, down_votes, age, gender, accent
+      `SELECT id, sentence, path, word_count, char_count, up_votes, down_votes, age, gender, accent, has_audio
        FROM clips WHERE ${where}
        ORDER BY ${sortCol} ${sortOrder}
        LIMIT ? OFFSET ?`

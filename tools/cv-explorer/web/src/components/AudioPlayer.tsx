@@ -22,12 +22,14 @@ export function AudioPlayer({ clip }: AudioPlayerProps) {
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [speed, setSpeed] = useState(1);
+  const [audioError, setAudioError] = useState(false);
 
-  // Auto-play when clip changes
+  // Reset error state and auto-play when clip changes
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;
 
+    setAudioError(false);
     audio.load();
     audio.playbackRate = speed;
     audio.play().then(() => setPlaying(true)).catch(() => setPlaying(false));
@@ -41,27 +43,33 @@ export function AudioPlayer({ clip }: AudioPlayerProps) {
     const onTimeUpdate = () => setCurrentTime(audio.currentTime);
     const onLoadedMetadata = () => setDuration(audio.duration);
     const onEnded = () => setPlaying(false);
+    const onError = () => {
+      setAudioError(true);
+      setPlaying(false);
+    };
 
     audio.addEventListener("timeupdate", onTimeUpdate);
     audio.addEventListener("loadedmetadata", onLoadedMetadata);
     audio.addEventListener("ended", onEnded);
+    audio.addEventListener("error", onError);
     return () => {
       audio.removeEventListener("timeupdate", onTimeUpdate);
       audio.removeEventListener("loadedmetadata", onLoadedMetadata);
       audio.removeEventListener("ended", onEnded);
+      audio.removeEventListener("error", onError);
     };
   }, []);
 
   const togglePlay = useCallback(() => {
     const audio = audioRef.current;
-    if (!audio) return;
+    if (!audio || audioError) return;
     if (playing) {
       audio.pause();
       setPlaying(false);
     } else {
       audio.play().then(() => setPlaying(true)).catch(() => {});
     }
-  }, [playing]);
+  }, [playing, audioError]);
 
   const handleSeek = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
@@ -114,7 +122,7 @@ export function AudioPlayer({ clip }: AudioPlayerProps) {
 
       <div className="flex items-center gap-3">
         {/* Play/Pause */}
-        <Button variant="outline" size="icon" onClick={togglePlay}>
+        <Button variant="outline" size="icon" onClick={togglePlay} disabled={audioError}>
           {playing ? <PauseIcon className="size-4" /> : <PlayIcon className="size-4" />}
         </Button>
 
@@ -122,27 +130,35 @@ export function AudioPlayer({ clip }: AudioPlayerProps) {
         <div className="flex min-w-0 flex-1 flex-col gap-1">
           <p className="truncate text-sm">{clip.sentence}</p>
 
-          {/* Progress bar */}
-          <div
-            className="group relative h-1.5 cursor-pointer rounded-full bg-muted"
-            onClick={handleSeek}
-          >
+          {audioError ? (
+            <p className="text-xs text-muted-foreground">Audio not yet synced</p>
+          ) : (
+            /* Progress bar */
             <div
-              className="h-full rounded-full bg-primary transition-all"
-              style={{ width: `${progress}%` }}
-            />
-          </div>
+              className="group relative h-1.5 cursor-pointer rounded-full bg-muted"
+              onClick={handleSeek}
+            >
+              <div
+                className="h-full rounded-full bg-primary transition-all"
+                style={{ width: `${progress}%` }}
+              />
+            </div>
+          )}
         </div>
 
-        {/* Time */}
-        <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
-          {formatTime(currentTime)}/{formatTime(duration)}
-        </span>
+        {!audioError && (
+          <>
+            {/* Time */}
+            <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
+              {formatTime(currentTime)}/{formatTime(duration)}
+            </span>
 
-        {/* Speed */}
-        <Button variant="ghost" size="xs" onClick={cycleSpeed} className="tabular-nums">
-          {speed}x
-        </Button>
+            {/* Speed */}
+            <Button variant="ghost" size="xs" onClick={cycleSpeed} className="tabular-nums">
+              {speed}x
+            </Button>
+          </>
+        )}
       </div>
     </div>
   );

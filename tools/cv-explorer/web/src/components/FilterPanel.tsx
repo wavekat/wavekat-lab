@@ -10,7 +10,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { RotateCcwIcon, SearchIcon } from "lucide-react";
+import { LoaderCircleIcon, RotateCcwIcon, SearchIcon, TriangleAlertIcon } from "lucide-react";
 
 const GENDERS = ["", "male", "female", "other"] as const;
 const AGES = [
@@ -81,23 +81,41 @@ export function FilterPanel({
           <Select
             value={currentDatasetId}
             onValueChange={(val) => onDatasetChange(val as string)}
+            itemToStringLabel={(id: string) => {
+              const ds = datasets.find((d) => d.id === id);
+              return ds ? `${ds.locale} / ${ds.split}` : id;
+            }}
           >
             <SelectTrigger>
               <SelectValue placeholder="Select dataset" />
             </SelectTrigger>
             <SelectContent>
               {datasets.map((ds) => (
-                <SelectItem key={ds.id} value={ds.id}>
-                  {ds.locale} / {ds.split}
-                  <span className="ml-1 text-muted-foreground">
-                    ({ds.clip_count.toLocaleString()})
+                <SelectItem
+                  key={ds.id}
+                  value={ds.id}
+                  disabled={ds.status === "failed"}
+                >
+                  <span className={ds.status !== "synced" ? "text-muted-foreground" : undefined}>
+                    {ds.locale} / {ds.split}
                   </span>
+                  {ds.status === "synced" && (
+                    <span className="ml-1 text-muted-foreground">
+                      ({ds.clip_count.toLocaleString()})
+                    </span>
+                  )}
+                  {ds.status === "syncing" && (
+                    <LoaderCircleIcon className="ml-1 inline size-3.5 animate-spin text-muted-foreground" />
+                  )}
+                  {ds.status === "failed" && (
+                    <TriangleAlertIcon className="ml-1 inline size-3.5 text-destructive" />
+                  )}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
         ) : (
-          <p className="text-xs text-muted-foreground">No datasets synced</p>
+          <p className="text-xs text-muted-foreground">No datasets available</p>
         )}
       </div>
 
@@ -198,6 +216,29 @@ export function FilterPanel({
                 {a}
               </SelectItem>
             ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      {/* Has audio */}
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="has_audio">Audio</Label>
+        <Select
+          value={filters.has_audio || "all"}
+          onValueChange={(val) =>
+            onFiltersChange({
+              ...filters,
+              has_audio: val === "all" ? undefined : (val as string),
+            })
+          }
+        >
+          <SelectTrigger>
+            <SelectValue placeholder="All" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All</SelectItem>
+            <SelectItem value="yes">Has audio</SelectItem>
+            <SelectItem value="no">No audio</SelectItem>
           </SelectContent>
         </Select>
       </div>

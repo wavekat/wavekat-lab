@@ -21,7 +21,8 @@ export interface Dataset {
   split: string;
   clip_count: number;
   size_bytes: number;
-  synced_at: string;
+  status: "synced" | "syncing" | "failed";
+  synced_at: string | null;
 }
 
 export interface ClipsResponse {
@@ -40,6 +41,7 @@ export interface Filters {
   max_words?: number;
   gender?: string;
   age?: string;
+  has_audio?: string;
   sort?: string;
   order?: string;
 }
@@ -67,6 +69,7 @@ export async function fetchClips(
     params.set("max_words", String(filters.max_words));
   if (filters.gender) params.set("gender", filters.gender);
   if (filters.age) params.set("age", filters.age);
+  if (filters.has_audio) params.set("has_audio", filters.has_audio);
   if (filters.sort) params.set("sort", filters.sort);
   if (filters.order) params.set("order", filters.order);
   params.set("offset", String(offset));
