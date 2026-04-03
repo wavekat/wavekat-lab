@@ -19,6 +19,11 @@ on:
           - test
           - invalidated
           - other
+      force:
+        description: "Force re-sync even if already synced"
+        required: false
+        default: false
+        type: boolean
 
 jobs:
   sync:
@@ -39,7 +44,8 @@ jobs:
         run: |
           npx tsx sync.ts \
             --dataset-id "${{ inputs.dataset_id }}" \
-            --split "${{ inputs.split }}"
+            --split "${{ inputs.split }}" \
+            ${{ inputs.force == true && '--force' || '' }}
         working-directory: tools/cv-explorer/scripts
         env:
           DATACOLLECTIVE_API_KEY: ${{ secrets.DATACOLLECTIVE_API_KEY }}

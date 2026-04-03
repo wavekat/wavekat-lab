@@ -722,6 +722,28 @@ async function main(): Promise<void> {
   // Create tables first (needed for status check)
   await createD1Tables();
 
+  // Early check: if not forcing, see if all requested splits are already synced
+  if (!FORCE && !SKIP_DOWNLOAD) {
+    const res = (await d1Query(
+      "SELECT split, status FROM datasets WHERE dataset_id = ?",
+      [DATASET_ID!],
+    )) as { result: Array<{ results: Array<{ split: string; status: string }> }> };
+    const rows = res?.result?.[0]?.results ?? [];
+    const syncedSplits = new Set(rows.filter((r) => r.status === "synced").map((r) => r.split));
+
+    const ALL_SPLITS = ["validated", "train", "dev", "test", "invalidated", "other"];
+    const requestedSplits = SPLIT_ARG === "all" ? ALL_SPLITS : [SPLIT_ARG];
+    const allDone = requestedSplits.every((s) => syncedSplits.has(s));
+
+    if (allDone) {
+      console.log("All requested splits already synced. Use --force to re-sync.");
+      console.log(`Synced: ${[...syncedSplits].join(", ")}`);
+      return;
+    }
+    const pending = requestedSplits.filter((s) => !syncedSplits.has(s));
+    console.log(`Splits still needed: ${pending.join(", ")}`);
+  }
+
   // Step 1: Download
   let archivePath: string;
   if (SKIP_DOWNLOAD) {
