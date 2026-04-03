@@ -1,8 +1,8 @@
 import { useRef, useState, useEffect, useCallback } from "react";
 import type { Clip } from "@/lib/api";
-import { audioUrl } from "@/lib/api";
+import { authFetch, audioUrl } from "@/lib/api";
 import { Button } from "@/components/ui/button";
-import { PauseIcon, PlayIcon } from "lucide-react";
+import { DownloadIcon, PauseIcon, PlayIcon } from "lucide-react";
 import WaveSurfer from "wavesurfer.js";
 
 const SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 2] as const;
@@ -20,6 +20,7 @@ interface AudioPlayerProps {
 export function AudioPlayer({ clip }: AudioPlayerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const wsRef = useRef<WaveSurfer | null>(null);
+  const blobUrlRef = useRef<string | null>(null);
   const [playing, setPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -32,44 +33,76 @@ export function AudioPlayer({ clip }: AudioPlayerProps) {
 
     // Destroy previous instance
     wsRef.current?.destroy();
+    wsRef.current = null;
+    if (blobUrlRef.current) {
+      URL.revokeObjectURL(blobUrlRef.current);
+      blobUrlRef.current = null;
+    }
 
-    const ws = WaveSurfer.create({
-      container: containerRef.current,
-      url: audioUrl(clip.audio_url),
-      height: 48,
-      barWidth: 2,
-      barGap: 1,
-      barRadius: 2,
-      waveColor: "oklch(0.556 0 0)",
-      progressColor: "oklch(0.205 0 0)",
-      cursorColor: "oklch(0.205 0 0)",
-      cursorWidth: 1,
-      normalize: true,
-    });
-
-    wsRef.current = ws;
     setAudioError(false);
     setCurrentTime(0);
     setDuration(0);
 
-    ws.on("ready", () => {
-      setDuration(ws.getDuration());
-      ws.setPlaybackRate(speed);
-      ws.play().catch(() => setPlaying(false));
-    });
+    let cancelled = false;
 
-    ws.on("timeupdate", (t) => setCurrentTime(t));
-    ws.on("finish", () => setPlaying(false));
-    ws.on("play", () => setPlaying(true));
-    ws.on("pause", () => setPlaying(false));
-    ws.on("error", () => {
-      setAudioError(true);
-      setPlaying(false);
-    });
+    // Fetch audio as blob with auth headers
+    authFetch(audioUrl(clip.audio_url))
+      .then((res) => {
+        if (!res.ok) throw new Error("fetch failed");
+        return res.blob();
+      })
+      .then((blob) => {
+        if (cancelled || !containerRef.current) return;
+
+        const url = URL.createObjectURL(blob);
+        blobUrlRef.current = url;
+
+        const ws = WaveSurfer.create({
+          container: containerRef.current,
+          url,
+          height: 48,
+          barWidth: 2,
+          barGap: 1,
+          barRadius: 2,
+          waveColor: "oklch(0.556 0 0)",
+          progressColor: "oklch(0.205 0 0)",
+          cursorColor: "oklch(0.205 0 0)",
+          cursorWidth: 1,
+          normalize: true,
+        });
+
+        wsRef.current = ws;
+
+        ws.on("ready", () => {
+          setDuration(ws.getDuration());
+          ws.setPlaybackRate(speed);
+          ws.play().catch(() => setPlaying(false));
+        });
+
+        ws.on("timeupdate", (t) => setCurrentTime(t));
+        ws.on("finish", () => setPlaying(false));
+        ws.on("play", () => setPlaying(true));
+        ws.on("pause", () => setPlaying(false));
+        ws.on("error", () => {
+          setAudioError(true);
+          setPlaying(false);
+        });
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setAudioError(true);
+          setPlaying(false);
+        }
+      });
 
     return () => {
-      ws.destroy();
+      cancelled = true;
+      wsRef.current?.destroy();
       wsRef.current = null;
+      if (blobUrlRef.current) {
+        URL.revokeObjectURL(blobUrlRef.current);
+        blobUrlRef.current = null;
+      }
     };
   }, [clip.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -87,6 +120,16 @@ export function AudioPlayer({ clip }: AudioPlayerProps) {
     ws.setPlaybackRate(next);
     setSpeed(next);
   }, [speed]);
+
+  const download = useCallback(() => {
+    const url = blobUrlRef.current;
+    if (!url) return;
+    const filename = clip.audio_url.split("/").pop() || "audio.mp3";
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    a.click();
+  }, [clip.audio_url]);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -141,6 +184,11 @@ export function AudioPlayer({ clip }: AudioPlayerProps) {
             {/* Speed */}
             <Button variant="ghost" size="xs" onClick={cycleSpeed} className="tabular-nums">
               {speed}x
+            </Button>
+
+            {/* Download */}
+            <Button variant="ghost" size="icon" onClick={download} title="Download audio">
+              <DownloadIcon className="size-4" />
             </Button>
           </>
         )}
