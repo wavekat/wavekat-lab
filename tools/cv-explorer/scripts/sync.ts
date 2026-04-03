@@ -45,7 +45,7 @@ const { values: args } = parseArgs({
     split: { type: "string", default: "all" },
     "dataset-id": { type: "string" },
     "work-dir": { type: "string", default: "/tmp/cv-sync" },
-    "r2-concurrency": { type: "string", default: "20" },
+    "r2-concurrency": { type: "string", default: "8" },
     "d1-batch-size": { type: "string", default: "100" },
     "skip-download": { type: "boolean", default: false },
     "skip-d1": { type: "boolean", default: false },
@@ -562,21 +562,29 @@ async function uploadToR2(clips: Clip[], clipsDir: string): Promise<void> {
         continue;
       }
 
-      try {
-        const body = createReadStream(localPath);
-        await r2.send(
-          new PutObjectCommand({
-            Bucket: R2_BUCKET_NAME,
-            Key: clip.path,
-            Body: body,
-            ContentType: "audio/mpeg",
-          })
-        );
-        uploaded++;
-      } catch (err) {
-        failed++;
-        if (failed <= 10) {
-          console.error(`  Failed to upload ${clip.path}: ${err}`);
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          const body = createReadStream(localPath);
+          await r2.send(
+            new PutObjectCommand({
+              Bucket: R2_BUCKET_NAME,
+              Key: clip.path,
+              Body: body,
+              ContentType: "audio/mpeg",
+            })
+          );
+          uploaded++;
+          break;
+        } catch (err) {
+          if (attempt < 2) {
+            // Exponential backoff: 1s, 3s
+            await new Promise((r) => setTimeout(r, 1000 * (attempt + 1) * 1.5));
+            continue;
+          }
+          failed++;
+          if (failed <= 10) {
+            console.error(`  Failed to upload ${clip.path}: ${err}`);
+          }
         }
       }
 
