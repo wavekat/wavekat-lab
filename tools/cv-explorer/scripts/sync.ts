@@ -392,7 +392,8 @@ async function createD1Tables(): Promise<void> {
       down_votes INTEGER DEFAULT 0,
       age        TEXT,
       gender     TEXT,
-      accent     TEXT
+      accent     TEXT,
+      has_audio  INTEGER DEFAULT 0
     )
   `);
 
@@ -401,6 +402,7 @@ async function createD1Tables(): Promise<void> {
     "ALTER TABLE datasets ADD COLUMN version TEXT NOT NULL DEFAULT ''",
     "ALTER TABLE datasets ADD COLUMN dataset_id TEXT NOT NULL DEFAULT ''",
     "ALTER TABLE clips ADD COLUMN version TEXT NOT NULL DEFAULT ''",
+    "ALTER TABLE clips ADD COLUMN has_audio INTEGER DEFAULT 0",
   ];
   for (const sql of migrations) {
     try {
@@ -532,12 +534,25 @@ async function r2ObjectExists(key: string): Promise<boolean> {
   }
 }
 
+async function markAudioInD1(ids: string[]): Promise<void> {
+  if (ids.length === 0) return;
+  for (let i = 0; i < ids.length; i += D1_BATCH_SIZE) {
+    const batch = ids.slice(i, i + D1_BATCH_SIZE);
+    const placeholders = batch.map(() => "?").join(",");
+    await d1Query(
+      `UPDATE clips SET has_audio = 1 WHERE id IN (${placeholders})`,
+      batch,
+    );
+  }
+}
+
 async function uploadToR2(clips: Clip[], clipsDir: string): Promise<void> {
   console.log(`Uploading ${clips.length} MP3 files to R2 (concurrency: ${R2_CONCURRENCY})...`);
 
   let uploaded = 0;
   let skipped = 0;
   let failed = 0;
+  const audioOkIds: string[] = [];
 
   // Process clips in parallel with bounded concurrency
   const queue = [...clips];
@@ -559,6 +574,7 @@ async function uploadToR2(clips: Clip[], clipsDir: string): Promise<void> {
       const exists = await r2ObjectExists(clip.path);
       if (exists) {
         skipped++;
+        audioOkIds.push(clip.id);
         continue;
       }
 
@@ -574,6 +590,7 @@ async function uploadToR2(clips: Clip[], clipsDir: string): Promise<void> {
             })
           );
           uploaded++;
+          audioOkIds.push(clip.id);
           break;
         } catch (err) {
           if (attempt < 2) {
@@ -598,6 +615,13 @@ async function uploadToR2(clips: Clip[], clipsDir: string): Promise<void> {
   await Promise.all(workers);
 
   console.log(`R2 upload complete: ${uploaded} uploaded, ${skipped} skipped, ${failed} failed.`);
+
+  // Update D1 to mark clips that have audio in R2
+  if (audioOkIds.length > 0) {
+    console.log(`Marking ${audioOkIds.length} clips as has_audio in D1...`);
+    await markAudioInD1(audioOkIds);
+    console.log("D1 has_audio update complete.");
+  }
 }
 
 // ---------------------------------------------------------------------------
