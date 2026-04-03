@@ -34,7 +34,7 @@ import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { parseArgs } from "node:util";
 
-import { S3Client, PutObjectCommand, HeadObjectCommand } from "@aws-sdk/client-s3";
+import { S3Client, PutObjectCommand, HeadObjectCommand, HeadBucketCommand } from "@aws-sdk/client-s3";
 
 // ---------------------------------------------------------------------------
 // CLI args
@@ -633,6 +633,49 @@ async function upsertDataset(
 }
 
 // ---------------------------------------------------------------------------
+// Preflight: verify credentials before doing real work
+// ---------------------------------------------------------------------------
+
+async function preflightChecks(): Promise<void> {
+  console.log("Preflight: checking credentials...");
+  const errors: string[] = [];
+
+  // Check D1
+  if (!SKIP_D1) {
+    try {
+      await d1Query("SELECT 1");
+    } catch (err) {
+      errors.push(`D1: ${err instanceof Error ? err.message : err}`);
+    }
+  }
+
+  // Check R2
+  if (!SKIP_R2) {
+    try {
+      await r2.send(new HeadBucketCommand({ Bucket: R2_BUCKET_NAME }));
+    } catch (err: unknown) {
+      const name = err instanceof Error ? err.name : "";
+      // HeadBucket returns NotFound if bucket doesn't exist, 403 if unauthorized
+      if (name === "NotFound" || name === "Forbidden" || name === "403" ||
+          (err instanceof Error && /unauthorized|forbidden|access denied/i.test(err.message))) {
+        errors.push(`R2: bucket "${R2_BUCKET_NAME}" — ${err instanceof Error ? err.message : err}`);
+      }
+      // Other errors (e.g. network) also count
+      else {
+        errors.push(`R2: ${err instanceof Error ? err.message : err}`);
+      }
+    }
+  }
+
+  if (errors.length > 0) {
+    console.error("Preflight failed:");
+    for (const e of errors) console.error(`  ✗ ${e}`);
+    process.exit(1);
+  }
+  console.log("Preflight: all checks passed.");
+}
+
+// ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
 
@@ -641,6 +684,9 @@ async function main(): Promise<void> {
   console.log(`Split: ${SPLIT_ARG}`);
   console.log(`Work dir: ${WORK_DIR}`);
   console.log();
+
+  // Verify credentials before doing any real work
+  await preflightChecks();
 
   // Create tables first (needed for status check)
   await createD1Tables();
