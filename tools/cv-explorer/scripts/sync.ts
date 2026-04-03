@@ -396,6 +396,20 @@ async function createD1Tables(): Promise<void> {
     )
   `);
 
+  // Migrate: add columns that may be missing from older schema
+  const migrations = [
+    "ALTER TABLE datasets ADD COLUMN version TEXT NOT NULL DEFAULT ''",
+    "ALTER TABLE datasets ADD COLUMN dataset_id TEXT NOT NULL DEFAULT ''",
+    "ALTER TABLE clips ADD COLUMN version TEXT NOT NULL DEFAULT ''",
+  ];
+  for (const sql of migrations) {
+    try {
+      await d1Query(sql);
+    } catch {
+      // column already exists — ignore
+    }
+  }
+
   const indices = [
     "CREATE INDEX IF NOT EXISTS idx_datasets_status ON datasets(status)",
     "CREATE INDEX IF NOT EXISTS idx_clips_locale_split ON clips(locale, split)",
