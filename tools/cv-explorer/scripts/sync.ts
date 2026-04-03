@@ -464,6 +464,7 @@ async function d1BatchInsert(
   const sql = `INSERT OR IGNORE INTO clips (id, version, locale, split, path, sentence, word_count, char_count, up_votes, down_votes, age, gender, accent) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
 
   let inserted = 0;
+  const startTime = Date.now();
 
   for (let i = 0; i < clips.length; i += D1_BATCH_SIZE) {
     const batch = clips.slice(i, i + D1_BATCH_SIZE);
@@ -506,7 +507,10 @@ async function d1BatchInsert(
 
     inserted += batch.length;
     if (inserted % 1000 === 0 || inserted === clips.length) {
-      console.log(`  D1: ${inserted}/${clips.length} rows inserted`);
+      const elapsed = (Date.now() - startTime) / 1000;
+      const rate = inserted / elapsed;
+      const remaining = (clips.length - inserted) / rate;
+      console.log(`  D1: ${inserted}/${clips.length} rows inserted (${formatDuration(elapsed)} elapsed, ~${formatDuration(remaining)} remaining)`);
     }
   }
 }
