@@ -178,8 +178,8 @@ async function downloadDataset(): Promise<string> {
 // Step 2: Extract archive
 // ---------------------------------------------------------------------------
 
-function extractArchive(archivePath: string): string {
-  const extractDir = join(WORK_DIR, "extracted");
+function extractArchive(archivePath: string, datasetId: string): string {
+  const extractDir = join(WORK_DIR, "extracted", datasetId);
   mkdirSync(extractDir, { recursive: true });
 
   console.log("Extracting archive...");
@@ -760,13 +760,25 @@ async function main(): Promise<void> {
     archivePath = await downloadDataset();
   }
 
-  // Step 2: Extract
-  const extractDir = join(WORK_DIR, "extracted");
+  // Clean up legacy shared extraction dir (pre-isolation) and other datasets
+  const extractParent = join(WORK_DIR, "extracted");
+  if (existsSync(extractParent)) {
+    for (const entry of readdirSync(extractParent)) {
+      if (entry !== DATASET_ID!) {
+        const fullPath = join(extractParent, entry);
+        console.log(`Cleaning up stale extraction: ${fullPath}`);
+        execSync(`rm -rf "${fullPath}"`);
+      }
+    }
+  }
+
+  // Step 2: Extract (isolated per dataset to avoid locale collisions)
+  const extractDir = join(WORK_DIR, "extracted", DATASET_ID!);
   const alreadyExtracted = existsSync(extractDir) && readdirSync(extractDir).length > 0;
   if (alreadyExtracted) {
     console.log("Already extracted, skipping extraction.");
   } else {
-    extractArchive(archivePath);
+    extractArchive(archivePath, DATASET_ID!);
   }
 
   // Step 3: Auto-detect version, locale, and splits
