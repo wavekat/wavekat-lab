@@ -562,9 +562,9 @@ async function uploadToR2(clips: Clip[], clipsDir: string): Promise<void> {
         continue;
       }
 
+      const body = readFileSync(localPath);
       for (let attempt = 0; attempt < 3; attempt++) {
         try {
-          const body = createReadStream(localPath);
           await r2.send(
             new PutObjectCommand({
               Bucket: R2_BUCKET_NAME,
@@ -577,7 +577,6 @@ async function uploadToR2(clips: Clip[], clipsDir: string): Promise<void> {
           break;
         } catch (err) {
           if (attempt < 2) {
-            // Exponential backoff: 1s, 3s
             await new Promise((r) => setTimeout(r, 1000 * (attempt + 1) * 1.5));
             continue;
           }
