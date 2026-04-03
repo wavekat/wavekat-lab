@@ -112,7 +112,7 @@ export default function App() {
       {/* Header */}
       <header className="flex items-center justify-between border-b px-4 py-2.5">
         <h1 className="text-sm font-semibold tracking-tight">
-          CV Dataset Explorer
+          Common Voice Explorer
         </h1>
         <span className="text-xs text-muted-foreground">
           {total.toLocaleString()} clips
