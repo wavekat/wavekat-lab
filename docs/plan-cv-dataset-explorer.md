@@ -55,18 +55,21 @@ Common Voice English (v17.0) is ~100 GB uncompressed. Options:
                               │   D1     │ │   R2       │
                               │ (SQLite) │ │ (audio)    │
                               │          │ │            │
-                              │ clips    │ │ en/clips/  │
-                              │ metadata │ │  *.mp3     │
+                              │ datasets │ │ en/clips/  │
+                              │ clips    │ │  *.mp3     │
                               └──────────┘ └────────────┘
 
         ┌───────────────────────────────────────────────┐
         │   GitHub Actions (self-hosted runner)          │
-        │   workflow_dispatch: locale, split, version    │
+        │   workflow_dispatch: dataset-id, split         │
         │                                               │
-        │   1. Download from Data Collective            │
-        │   2. Parse TSV metadata                       │
-        │   3. INSERT into D1 ──────────────────────────┼──▶ D1
-        │   4. Upload MP3s to R2 ───────────────────────┼──▶ R2
+        │   1. Check datasets table — skip if synced    │
+        │   2. Download from Data Collective            │
+        │   3. Auto-detect locale + version from archive│
+        │   4. Parse TSV metadata (one or all splits)   │
+        │   5. DELETE + INSERT into D1 ─────────────────┼──▶ D1
+        │   6. Upload MP3s to R2 ───────────────────────┼──▶ R2
+        │   7. Update datasets table → "synced"         │
         └───────────────────────────────────────────────┘
 ```
 
@@ -93,7 +96,8 @@ tools/
           clips.ts               # GET /api/clips — query D1 with filters
           audio.ts               # GET /api/audio/:path — serve from R2
       migrations/
-        0001_create_clips.sql    # D1 schema
+        0001_create_datasets.sql # D1 schema: datasets registry
+        0002_create_clips.sql    # D1 schema: clips metadata
       wrangler.toml              # Worker config (D1, R2 bindings)
       package.json
       tsconfig.json
@@ -127,9 +131,35 @@ tools/
 
 ## D1 Schema
 
+Two tables: `datasets` (sync registry) and `clips` (per-clip metadata).
+
+### `datasets` — sync registry
+
+Tracks what has been synced. Powers the frontend dataset dropdown and prevents
+unnecessary re-downloads.
+
+```sql
+CREATE TABLE datasets (
+  id          TEXT PRIMARY KEY,      -- "{version}/{locale}/{split}"
+  dataset_id  TEXT NOT NULL,         -- Data Collective ID (for re-download)
+  version     TEXT NOT NULL,         -- e.g. "cv-corpus-25.0-2026-03-09"
+  locale      TEXT NOT NULL,         -- auto-detected from archive
+  split       TEXT NOT NULL,         -- "validated", "train", "dev", "test", etc.
+  clip_count  INTEGER DEFAULT 0,
+  size_bytes  INTEGER DEFAULT 0,     -- archive size from API
+  status      TEXT NOT NULL,         -- "syncing", "synced", "failed"
+  synced_at   TEXT                   -- ISO 8601 timestamp of last sync
+);
+
+CREATE INDEX idx_datasets_status ON datasets(status);
+```
+
+### `clips` — per-clip metadata
+
 ```sql
 CREATE TABLE clips (
   id         TEXT PRIMARY KEY,      -- e.g. "common_voice_en_39876"
+  version    TEXT NOT NULL,         -- e.g. "cv-corpus-25.0-2026-03-09"
   locale     TEXT NOT NULL,
   split      TEXT NOT NULL,         -- "train", "dev", "test", "validated", etc.
   path       TEXT NOT NULL,         -- R2 key: "en/clips/common_voice_en_39876.mp3"
@@ -144,10 +174,20 @@ CREATE TABLE clips (
 );
 
 CREATE INDEX idx_clips_locale_split ON clips(locale, split);
+CREATE INDEX idx_clips_version      ON clips(version, locale, split);
 CREATE INDEX idx_clips_word_count   ON clips(word_count);
 CREATE INDEX idx_clips_char_count   ON clips(char_count);
 CREATE INDEX idx_clips_sentence     ON clips(sentence);  -- for LIKE queries
 ```
+
+### Re-sync strategy
+
+On re-sync of the same version/locale/split:
+1. `DELETE FROM clips WHERE version = ? AND locale = ? AND split = ?` (bulk wipe)
+2. Insert fresh rows
+3. R2 uploads skip existing objects (same audio = same key = skip)
+
+This avoids per-row `REPLACE` costs while ensuring metadata is up-to-date.
 
 D1 supports SQLite FTS5 if we need full-text search later, but `LIKE '%keyword%'` is
 sufficient for MVP given the indexed dataset sizes we'll start with.
@@ -157,6 +197,7 @@ sufficient for MVP given the indexed dataset sizes we'll start with.
 ## Features (MVP)
 
 ### Filtering
+- **Dataset selector** — dropdown populated from `datasets` table (synced datasets only)
 - **Text search** — `LIKE '%query%'` on sentence text (case-insensitive)
 - **Word count range** — min/max word count slider
 - **Locale** — language selector (based on what's been ingested)
@@ -242,6 +283,25 @@ Response:
 ### `GET /api/audio/:path+`
 
 Serves audio file from R2. Returns `audio/mpeg` with cache headers.
+
+### `GET /api/datasets`
+
+Returns all synced datasets, for populating the dataset dropdown.
+
+```json
+{
+  "datasets": [
+    {
+      "id": "cv-corpus-25.0-2026-03-09/zh-TW/validated",
+      "version": "cv-corpus-25.0-2026-03-09",
+      "locale": "zh-TW",
+      "split": "validated",
+      "clip_count": 85324,
+      "synced_at": "2026-04-03T12:00:00Z"
+    }
+  ]
+}
+```
 
 ### `GET /api/stats`
 
@@ -389,45 +449,35 @@ jobs:
 
 Triggered after the runner is online. Runs on the `cv-sync` label (the Azure VM).
 
+Inputs:
+- **`dataset_id`** (required) — Data Collective dataset ID (from the dataset page URL)
+- **`split`** (required, default `all`) — Which split to sync. `all` syncs every TSV found.
+
+Locale and version are **auto-detected** from the extracted archive directory name
+(e.g., `cv-corpus-25.0-2026-03-09/zh-TW/`). No need to specify them manually.
+
 ```yaml
 name: "CV: Dataset Sync"
 
 on:
   workflow_dispatch:
     inputs:
-      locale:
-        description: "Common Voice locale (e.g. en, ja, zh-TW)"
+      dataset_id:
+        description: "Data Collective dataset ID"
         required: true
-        default: "en"
       split:
-        description: "Dataset split (validated, train, dev, test)"
+        description: "Dataset split (or 'all')"
         required: true
-        default: "validated"
-      version:
-        description: "Common Voice version (e.g. cv-corpus-17.0-2024-03-15)"
-        required: true
-        default: "cv-corpus-17.0-2024-03-15"
-
-jobs:
-  sync:
-    runs-on: cv-sync                  # matches the label from provisioning
-    steps:
-      - uses: actions/checkout@v6
-      - run: npm ci
-        working-directory: tools/cv-explorer/scripts
-      - name: Sync dataset
-        run: |
-          npx tsx sync.ts \
-            --locale ${{ inputs.locale }} \
-            --split ${{ inputs.split }} \
-            --version ${{ inputs.version }}
-        working-directory: tools/cv-explorer/scripts
-        env:
-          DATACOLLECTIVE_API_KEY: ${{ secrets.DATACOLLECTIVE_API_KEY }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          D1_DATABASE_ID: ${{ secrets.CV_EXPLORER_D1_ID }}
-          R2_BUCKET_NAME: ${{ secrets.CV_EXPLORER_R2_BUCKET }}
+        default: "all"
+        type: choice
+        options:
+          - all
+          - validated
+          - train
+          - dev
+          - test
+          - invalidated
+          - other
 ```
 
 ### Workflow: typical usage
@@ -435,9 +485,12 @@ jobs:
 ```
 1. Trigger "CV: Provision Runner" (pick VM size, disk, max hours)
 2. Wait ~2 min for VM to come online
-3. Trigger "CV: Dataset Sync" (pick locale, split, version)
-4. Sync runs on the Azure VM
-5. VM auto-shuts down after max_hours (or after the ephemeral job completes)
+3. Trigger "CV: Dataset Sync" (pick dataset_id, split)
+4. Script checks datasets table — skips if already synced
+5. Downloads, extracts, auto-detects locale + version
+6. Syncs selected split (or all splits) to D1 + R2
+7. Updates datasets table with status + metadata
+8. VM auto-shuts down after max_hours (or after the ephemeral job completes)
 ```
 
 ### Sync script: `tools/cv-explorer/scripts/sync.ts`
@@ -445,17 +498,33 @@ jobs:
 The script does the actual work:
 
 ```
+Usage:
+  npx tsx sync.ts --dataset-id <id> --split validated
+  npx tsx sync.ts --dataset-id <id> --split all
+  npx tsx sync.ts --dataset-id <id> --split all --force   # re-sync even if already synced
+
 Steps:
-1. Call Data Collective API → get presigned download URL
-2. Download + extract tar.gz (streamed, not fully buffered)
-3. Parse TSV metadata (validated.tsv, train.tsv, etc.)
-4. Batch INSERT rows into D1 (via Cloudflare REST API, 1000 rows/batch)
-5. Upload MP3s to R2 (via S3-compatible API, parallelized, skip existing)
-6. Report: X clips ingested, Y audio files uploaded, Z skipped
+1. Query datasets table — if status = "synced" for this dataset/split, skip (unless --force)
+2. Upsert datasets row with status = "syncing"
+3. Call Data Collective API → get presigned download URL
+4. Download + extract tar.gz (streamed, not fully buffered)
+5. Auto-detect version + locale from archive dir (e.g. cv-corpus-25.0-2026-03-09/zh-TW/)
+6. If split = "all", find all *.tsv files; otherwise use the specified split
+7. For each split:
+   a. Parse TSV metadata
+   b. DELETE FROM clips WHERE version/locale/split match (clean slate)
+   c. Batch INSERT rows into D1 (via Cloudflare REST API, batched)
+   d. Upload MP3s to R2 (S3-compatible API, parallelized, skip existing)
+8. Update datasets row → status = "synced", clip_count, size_bytes, synced_at
+9. On failure → update status = "failed"
 ```
 
 Features:
-- **Resumable** — skips already-uploaded R2 objects, uses `INSERT OR IGNORE` for D1
+- **Skip-if-synced** — checks datasets table before downloading; `--force` overrides
+- **Auto-detect** — locale and version parsed from archive, not manual input
+- **Split "all"** — syncs every TSV found in the locale directory
+- **Clean re-sync** — DELETE + INSERT per version/locale/split (no stale rows)
+- **R2 dedup** — skips already-uploaded audio objects (same key = skip)
 - **Progress reporting** — logs progress to GitHub Actions step summary
 - **Parallelized uploads** — configurable concurrency for R2 uploads (default: 20)
 
@@ -468,10 +537,10 @@ required secrets, and typical usage.
 
 ## Open Questions
 
-1. **Which locale to start with?** English is huge (~100 GB). A smaller locale like `zh-TW`
-   or `ja` would be faster to validate the pipeline, but English is more relevant for turn
-   detection training.
-2. **Dataset version** — Pin to Common Voice v17.0 or support multiple versions?
+1. ~~**Which locale to start with?**~~ Started with `zh-TW` (85K clips). Locale is now
+   auto-detected from the archive — no manual selection needed.
+2. ~~**Dataset version**~~ — Multiple versions supported. Version stored in both `datasets`
+   and `clips` tables, parsed from archive directory name.
 3. **D1 row limits** — D1 free tier allows 5 GB storage. English validated split has ~1.6M
    clips — metadata should fit. Need to verify.
 4. **R2 storage costs** — R2 free tier: 10 GB storage, 10M reads/month. A subset of audio
