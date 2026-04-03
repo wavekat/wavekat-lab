@@ -3,34 +3,22 @@ name: "CV: Dataset Sync"
 on:
   workflow_dispatch:
     inputs:
-      locale:
-        description: "Common Voice locale"
+      dataset_id:
+        description: "Data Collective dataset ID (from URL on datacollective.mozillafoundation.org)"
         required: true
-        default: "en"
-        type: choice
-        options:
-          - en        # English
-          - en-AU     # English (Australia)
-          - en-US     # English (US)
-          - ja        # Japanese
-          - zh-TW     # Chinese (Taiwan)
-          - zh-CN     # Chinese (China)
-          - zh-HK     # Chinese (Hong Kong)
       split:
-        description: "Dataset split"
+        description: "Dataset split (or 'all' to sync everything)"
         required: true
-        default: "validated"
+        default: "all"
         type: choice
         options:
+          - all
           - validated
           - train
           - dev
           - test
           - invalidated
           - other
-      dataset_id:
-        description: "Data Collective dataset ID (from URL on datacollective.mozillafoundation.org)"
-        required: true
 
 jobs:
   sync:
@@ -49,9 +37,8 @@ jobs:
       - name: Sync dataset
         run: |
           npx tsx sync.ts \
-            --locale "${{ inputs.locale }}" \
-            --split "${{ inputs.split }}" \
-            --dataset-id "${{ inputs.dataset_id }}"
+            --dataset-id "${{ inputs.dataset_id }}" \
+            --split "${{ inputs.split }}"
         working-directory: tools/cv-explorer/scripts
         env:
           DATACOLLECTIVE_API_KEY: ${{ secrets.DATACOLLECTIVE_API_KEY }}
@@ -109,9 +96,8 @@ jobs:
 
           | Setting | Value |
           |---------|-------|
-          | **Locale** | \`${{ inputs.locale }}\` |
-          | **Split** | \`${{ inputs.split }}\` |
           | **Dataset ID** | \`${{ inputs.dataset_id }}\` |
+          | **Split** | \`${{ inputs.split }}\` |
 
           Runner VM has been cleaned up.
           EOF
