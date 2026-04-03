@@ -46,7 +46,7 @@ sync:
 build:
 	$(NVM) cd web && npm run build
 
-deploy:
+deploy: build
 	$(NVM) cd worker && npx wrangler deploy
 
 migrate-remote:

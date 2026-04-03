@@ -18,6 +18,7 @@ export type Env = {
   Bindings: {
     DB: D1Database;
     AUDIO: R2Bucket;
+    ASSETS: Fetcher;
     GITHUB_CLIENT_ID: string;
     GITHUB_CLIENT_SECRET: string;
     JWT_SECRET: string;
@@ -44,5 +45,12 @@ app.use("/api/stats", auth, requireTerms);
 app.route("/api", clipsRoute);
 app.route("/api", audioRoute);
 app.route("/api", datasetsRoute);
+
+// SPA catch-all: serve index.html for any non-API, non-asset route
+app.get("*", async (c) => {
+  const url = new URL(c.req.url);
+  url.pathname = "/index.html";
+  return c.env.ASSETS.fetch(new Request(url, c.req.raw));
+});
 
 export default app;

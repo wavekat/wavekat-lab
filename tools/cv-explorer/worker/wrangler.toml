@@ -2,6 +2,9 @@ name = "cv-explorer-api"
 main = "src/index.ts"
 compatibility_date = "2025-04-01"
 
+[assets]
+directory = "../web/dist"
+
 [vars]
 GITHUB_CLIENT_ID = ""
 TERMS_VERSION = "cv-2024-12"
