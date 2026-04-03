@@ -19,6 +19,16 @@ on:
           - test
           - invalidated
           - other
+      r2_concurrency:
+        description: "Number of concurrent R2 uploads"
+        required: false
+        default: "32"
+        type: choice
+        options:
+          - "8"
+          - "16"
+          - "32"
+          - "64"
       force:
         description: "Force re-sync even if already synced"
         required: false
@@ -45,6 +55,7 @@ jobs:
           npx tsx sync.ts \
             --dataset-id "${{ inputs.dataset_id }}" \
             --split "${{ inputs.split }}" \
+            --r2-concurrency "${{ inputs.r2_concurrency }}" \
             ${{ inputs.force == true && '--force' || '' }}
         working-directory: tools/cv-explorer/scripts
         env:

@@ -68,6 +68,15 @@ const FORCE = args.force!;
 // Environment
 // ---------------------------------------------------------------------------
 
+function formatDuration(seconds: number): string {
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = Math.floor(seconds % 60);
+  if (h > 0) return `${h}h${m}m${s}s`;
+  if (m > 0) return `${m}m${s}s`;
+  return `${s}s`;
+}
+
 function requireEnv(name: string): string {
   const val = process.env[name];
   if (!val) {
@@ -553,6 +562,7 @@ async function uploadToR2(clips: Clip[], clipsDir: string): Promise<void> {
   let skipped = 0;
   let failed = 0;
   const audioOkIds: string[] = [];
+  const startTime = Date.now();
 
   // Process clips in parallel with bounded concurrency
   const queue = [...clips];
@@ -606,7 +616,12 @@ async function uploadToR2(clips: Clip[], clipsDir: string): Promise<void> {
 
       const total = uploaded + skipped + failed;
       if (total % 500 === 0) {
-        console.log(`  R2: ${uploaded} uploaded, ${skipped} skipped, ${failed} failed / ${clips.length} total`);
+        const elapsed = (Date.now() - startTime) / 1000;
+        const rate = total / elapsed;
+        const remaining = (clips.length - total) / rate;
+        const elapsedStr = formatDuration(elapsed);
+        const etaStr = formatDuration(remaining);
+        console.log(`  R2: ${uploaded} uploaded, ${skipped} skipped, ${failed} failed / ${clips.length} total (${elapsedStr} elapsed, ~${etaStr} remaining)`);
       }
     }
   }
