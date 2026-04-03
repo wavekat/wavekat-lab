@@ -72,7 +72,7 @@ jobs:
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      - name: Delete runner VM
+      - name: Delete runner VM and associated resources
         uses: azure/cli@v3
         with:
           inlineScript: |
@@ -90,6 +90,14 @@ jobs:
                 --name "$VM" \
                 --yes \
                 --force-deletion true
+
+              # Delete leftover networking resources (Azure auto-names these with suffixes)
+              echo "Deleting NSG: ${VM}NSG"
+              az network nsg delete --resource-group "$RG" --name "${VM}NSG" 2>/dev/null || true
+              echo "Deleting Public IP: ${VM}PublicIP"
+              az network public-ip delete --resource-group "$RG" --name "${VM}PublicIP" 2>/dev/null || true
+              echo "Deleting VNET: ${VM}VNET"
+              az network vnet delete --resource-group "$RG" --name "${VM}VNET" 2>/dev/null || true
             done
 
             echo "Cleanup complete."
