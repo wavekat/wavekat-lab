@@ -22,7 +22,8 @@ on:
 
 jobs:
   sync:
-    runs-on: ubuntu-latest-m # cv-sync
+    # runs-on: ubuntu-latest-m # cv-sync
+    runs-on: cv-sync
     steps:
       - uses: actions/checkout@v6
 
