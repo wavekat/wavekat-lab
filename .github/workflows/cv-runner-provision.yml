@@ -98,13 +98,12 @@ jobs:
                 rm actions-runner.tar.gz
                 chown -R runner:runner /home/runner/actions-runner
 
-                # Register as ephemeral runner (auto-deregisters after one job)
+                # Register as persistent runner (stays online for multiple jobs)
                 su - runner -c 'cd /home/runner/actions-runner && ./config.sh \
                   --url https://github.com/${{ github.repository }} \
                   --token ${{ steps.token.outputs.reg_token }} \
                   --name $RUNNER_NAME \
                   --labels cv-sync \
-                  --ephemeral \
                   --unattended'
 
                 # Install and start as a systemd service
