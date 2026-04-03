@@ -29,6 +29,15 @@ on:
           - "16"
           - "32"
           - "64"
+      runner:
+        description: "GitHub Actions runner"
+        required: false
+        default: "cv-sync"
+        type: choice
+        options:
+          - cv-sync
+          - ubuntu-latest-m
+          - ubuntu-latest-l
       force:
         description: "Force re-sync even if already synced"
         required: false
@@ -37,8 +46,7 @@ on:
 
 jobs:
   sync:
-    # runs-on: ubuntu-latest-m # cv-sync
-    runs-on: cv-sync
+    runs-on: ${{ inputs.runner }}
     steps:
       - uses: actions/checkout@v6
 
