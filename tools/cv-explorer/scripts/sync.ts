@@ -573,8 +573,18 @@ async function uploadToR2(clips: Clip[], clipsDir: string): Promise<void> {
   let uploaded = 0;
   let skipped = 0;
   let failed = 0;
-  const audioOkIds: string[] = [];
+  let audioOkIds: string[] = [];
+  let totalMarked = 0;
+  const FLUSH_THRESHOLD = 500;
   const startTime = Date.now();
+
+  async function flushAudioIds(): Promise<void> {
+    if (audioOkIds.length === 0) return;
+    const batch = audioOkIds;
+    audioOkIds = [];
+    await markAudioInD1(batch);
+    totalMarked += batch.length;
+  }
 
   // Process clips in parallel with bounded concurrency
   const queue = [...clips];
@@ -635,20 +645,21 @@ async function uploadToR2(clips: Clip[], clipsDir: string): Promise<void> {
         const etaStr = formatDuration(remaining);
         console.log(`  R2: ${uploaded} uploaded, ${skipped} skipped, ${failed} failed / ${clips.length} total (${elapsedStr} elapsed, ~${etaStr} remaining)`);
       }
+
+      // Flush has_audio updates periodically
+      if (audioOkIds.length >= FLUSH_THRESHOLD) {
+        await flushAudioIds();
+      }
     }
   }
 
   const workers = Array.from({ length: R2_CONCURRENCY }, () => worker());
   await Promise.all(workers);
 
-  console.log(`R2 upload complete: ${uploaded} uploaded, ${skipped} skipped, ${failed} failed.`);
+  // Flush remaining IDs
+  await flushAudioIds();
 
-  // Update D1 to mark clips that have audio in R2
-  if (audioOkIds.length > 0) {
-    console.log(`Marking ${audioOkIds.length} clips as has_audio in D1...`);
-    await markAudioInD1(audioOkIds);
-    console.log("D1 has_audio update complete.");
-  }
+  console.log(`R2 upload complete: ${uploaded} uploaded, ${skipped} skipped, ${failed} failed. Marked ${totalMarked} clips as has_audio.`);
 }
 
 // ---------------------------------------------------------------------------
