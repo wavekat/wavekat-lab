@@ -14,7 +14,7 @@ export const audioRoute = new Hono<Env>().get("/audio/*", async (c) => {
 
   const headers = new Headers();
   headers.set("Content-Type", "audio/mpeg");
-  headers.set("Cache-Control", "public, max-age=31536000, immutable");
+  headers.set("Cache-Control", "private, no-store");
   headers.set("Accept-Ranges", "bytes");
 
   if (object.size) {

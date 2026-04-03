@@ -2,6 +2,13 @@ name = "cv-explorer-api"
 main = "src/index.ts"
 compatibility_date = "2025-04-01"
 
+[vars]
+GITHUB_CLIENT_ID = ""
+TERMS_VERSION = "cv-2024-12"
+
+# Secrets (via `wrangler secret put`): GITHUB_CLIENT_SECRET, JWT_SECRET
+# Local dev: override all three in .dev.vars (separate OAuth app for localhost callback)
+
 [[d1_databases]]
 binding = "DB"
 database_name = "cv-explorer"

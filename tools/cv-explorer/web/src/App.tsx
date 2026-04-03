@@ -1,152 +1,61 @@
-import { useState, useEffect, useCallback } from "react";
-import {
-  fetchDatasets,
-  fetchClips,
-  type Clip,
-  type Dataset,
-  type Filters,
-} from "@/lib/api";
-import { FilterPanel } from "@/components/FilterPanel";
-import { ClipList } from "@/components/ClipList";
-import { AudioPlayer } from "@/components/AudioPlayer";
+import { useState, useEffect } from "react";
+import { initAuth, logout, type AuthUser } from "@/lib/auth";
+import { LoginPage } from "@/components/LoginPage";
+import { TermsGate } from "@/components/TermsGate";
+import { AuthCallback } from "@/components/AuthCallback";
+import { Explorer } from "@/components/Explorer";
+import { Loader2 } from "lucide-react";
 
 export default function App() {
-  const [datasets, setDatasets] = useState<Dataset[]>([]);
-  const [filters, setFilters] = useState<Filters>({
-    locale: "en",
-    split: "validated",
-  });
-  const [clips, setClips] = useState<Clip[]>([]);
-  const [total, setTotal] = useState(0);
-  const [offset, setOffset] = useState(0);
-  const [selectedClip, setSelectedClip] = useState<Clip | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [ready, setReady] = useState(false);
+  const [user, setUser] = useState<AuthUser | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  // Fetch datasets on mount
-  useEffect(() => {
-    fetchDatasets()
-      .then((ds) => {
-        setDatasets(ds);
-        if (ds.length > 0) {
-          const first = ds[0];
-          setFilters({
-            version: first.version,
-            locale: first.locale,
-            split: first.split,
-          });
-        }
-        setReady(true);
-      })
-      .catch(() => setReady(true));
-  }, []);
+  const isCallback = window.location.pathname === "/auth/callback";
 
-  // Fetch clips when filters or offset change
   useEffect(() => {
-    if (!ready) return;
-    setLoading(true);
-    fetchClips(filters, offset)
-      .then((data) => {
-        setClips(data.clips);
-        setTotal(data.total);
-      })
-      .catch(() => {
-        setClips([]);
-        setTotal(0);
-      })
+    if (isCallback) {
+      setLoading(false);
+      return;
+    }
+    initAuth()
+      .then((u) => setUser(u))
       .finally(() => setLoading(false));
-  }, [filters, offset, ready]);
+  }, [isCallback]);
 
-  const handleDatasetChange = useCallback(
-    (datasetId: string) => {
-      const ds = datasets.find((d) => d.id === datasetId);
-      if (ds) {
-        setFilters((f) => ({
-          ...f,
-          version: ds.version,
-          locale: ds.locale,
-          split: ds.split,
-        }));
-        setOffset(0);
-        setSelectedClip(null);
-      }
-    },
-    [datasets]
-  );
+  if (isCallback) {
+    return (
+      <AuthCallback
+        onSuccess={(u) => {
+          setUser(u);
+          window.history.replaceState(null, "", "/");
+        }}
+      />
+    );
+  }
 
-  const handleFiltersChange = useCallback((f: Filters) => {
-    setFilters(f);
-    setOffset(0);
-  }, []);
+  if (loading) {
+    return (
+      <div className="flex h-screen items-center justify-center">
+        <Loader2 className="size-5 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
 
-  // Arrow key navigation for clips
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if (
-        e.target instanceof HTMLInputElement ||
-        e.target instanceof HTMLTextAreaElement
-      )
-        return;
-      if (clips.length === 0) return;
+  if (!user) {
+    return <LoginPage />;
+  }
 
-      if (e.key === "ArrowDown" || e.key === "j") {
-        e.preventDefault();
-        const idx = selectedClip
-          ? clips.findIndex((c) => c.id === selectedClip.id)
-          : -1;
-        if (idx < clips.length - 1) setSelectedClip(clips[idx + 1]);
-      } else if (e.key === "ArrowUp" || e.key === "k") {
-        e.preventDefault();
-        const idx = selectedClip
-          ? clips.findIndex((c) => c.id === selectedClip.id)
-          : clips.length;
-        if (idx > 0) setSelectedClip(clips[idx - 1]);
-      }
-    };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, [clips, selectedClip]);
+  if (!user.terms_accepted) {
+    return <TermsGate onAccept={(u) => setUser(u)} onDecline={() => setUser(null)} />;
+  }
 
   return (
-    <div className="flex h-screen flex-col">
-      {/* Header */}
-      <header className="flex items-center justify-between border-b px-4 py-2.5">
-        <h1 className="text-sm font-semibold tracking-tight">
-          Common Voice Explorer
-        </h1>
-        <span className="text-xs text-muted-foreground">
-          {total.toLocaleString()} clips
-        </span>
-      </header>
-
-      {/* Main content */}
-      <div className="flex flex-1 overflow-hidden">
-        {/* Filter sidebar */}
-        <aside className="w-56 shrink-0 overflow-y-auto border-r p-3">
-          <FilterPanel
-            datasets={datasets}
-            filters={filters}
-            onFiltersChange={handleFiltersChange}
-            onDatasetChange={handleDatasetChange}
-          />
-        </aside>
-
-        {/* Clip list */}
-        <main className="flex flex-1 flex-col overflow-hidden">
-          <ClipList
-            clips={clips}
-            total={total}
-            offset={offset}
-            loading={loading}
-            selectedClip={selectedClip}
-            onSelectClip={setSelectedClip}
-            onOffsetChange={setOffset}
-          />
-        </main>
-      </div>
-
-      {/* Audio player */}
-      {selectedClip && <AudioPlayer clip={selectedClip} />}
-    </div>
+    <Explorer
+      user={user}
+      onLogout={() => {
+        logout();
+        setUser(null);
+      }}
+    />
   );
 }

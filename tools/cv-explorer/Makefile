@@ -13,7 +13,8 @@ install:
 # ---------- Local dev ----------
 
 dev:
-	@echo "Starting worker on :8787 and web on :5173..."
+	@echo "Starting worker on :8787 and web on :5174..."
+	@grep -E '^(GITHUB_CLIENT_ID|GITHUB_CLIENT_SECRET|JWT_SECRET)=' .env > worker/.dev.vars 2>/dev/null || true
 	@trap 'kill 0' EXIT; \
 		source $$NVM_DIR/nvm.sh && nvm use 22 --silent && \
 		cd worker && npx wrangler dev & \
@@ -22,6 +23,7 @@ dev:
 		wait
 
 dev-worker:
+	@grep -E '^(GITHUB_CLIENT_ID|GITHUB_CLIENT_SECRET|JWT_SECRET)=' .env > worker/.dev.vars 2>/dev/null || true
 	$(NVM) cd worker && npx wrangler dev
 
 dev-web:

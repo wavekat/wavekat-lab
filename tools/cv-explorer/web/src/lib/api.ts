@@ -1,3 +1,5 @@
+import { getAccessToken, clearAuth } from "./auth";
+
 const API_BASE = import.meta.env.VITE_API_URL || "";
 
 export interface Clip {
@@ -46,8 +48,36 @@ export interface Filters {
   order?: string;
 }
 
+export async function authFetch(
+  url: string,
+  init?: RequestInit,
+): Promise<Response> {
+  const token = await getAccessToken();
+  if (!token) {
+    clearAuth();
+    window.location.href = "/";
+    throw new Error("unauthorized");
+  }
+
+  const res = await fetch(url, {
+    ...init,
+    headers: {
+      ...init?.headers,
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  if (res.status === 401) {
+    clearAuth();
+    window.location.href = "/";
+    throw new Error("unauthorized");
+  }
+
+  return res;
+}
+
 export async function fetchDatasets(): Promise<Dataset[]> {
-  const res = await fetch(`${API_BASE}/api/datasets`);
+  const res = await authFetch(`${API_BASE}/api/datasets`);
   if (!res.ok) throw new Error("Failed to fetch datasets");
   const data = (await res.json()) as { datasets: Dataset[] };
   return data.datasets;
@@ -56,7 +86,7 @@ export async function fetchDatasets(): Promise<Dataset[]> {
 export async function fetchClips(
   filters: Filters,
   offset = 0,
-  limit = 50
+  limit = 50,
 ): Promise<ClipsResponse> {
   const params = new URLSearchParams();
   if (filters.version) params.set("version", filters.version);
@@ -75,7 +105,7 @@ export async function fetchClips(
   params.set("offset", String(offset));
   params.set("limit", String(limit));
 
-  const res = await fetch(`${API_BASE}/api/clips?${params}`);
+  const res = await authFetch(`${API_BASE}/api/clips?${params}`);
   if (!res.ok) throw new Error("Failed to fetch clips");
   return res.json() as Promise<ClipsResponse>;
 }
