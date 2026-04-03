@@ -6,12 +6,12 @@ on:
       vm_size:
         description: "Azure VM size"
         required: true
-        default: "Standard_D4s_v5"
+        default: "Standard_D4s_v6"
         type: choice
         options:
-          - Standard_D2s_v5     # 2 vCPU, 8 GB RAM
-          - Standard_D4s_v5     # 4 vCPU, 16 GB RAM
-          - Standard_D8s_v5     # 8 vCPU, 32 GB RAM
+          - Standard_D2s_v6     # 2 vCPU, 8 GB RAM
+          - Standard_D4s_v6     # 4 vCPU, 16 GB RAM
+          - Standard_D8s_v6     # 8 vCPU, 32 GB RAM
       disk_size_gb:
         description: "OS disk size in GB"
         required: true
