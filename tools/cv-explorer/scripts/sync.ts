@@ -421,7 +421,7 @@ async function d1BatchInsert(clips: Clip[]): Promise<void> {
           Authorization: `Bearer ${CLOUDFLARE_API_TOKEN}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(statements),
+        body: JSON.stringify({ batch: statements }),
       }
     );
 
