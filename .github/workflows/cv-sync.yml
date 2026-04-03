@@ -36,6 +36,7 @@ on:
         type: choice
         options:
           - cv-sync
+          - ubuntu-latest
           - ubuntu-latest-m
           - ubuntu-latest-l
       force:
