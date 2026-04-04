@@ -68,7 +68,7 @@ ci-backend:
 ci-frontend:
 	cd frontend && npm run lint && npm run build
 
-# Run CV Explorer CI checks (typecheck worker + build web)
+# Run Common Voice Explorer CI checks (typecheck worker + build web)
 ci-cv-explorer:
 	cd tools/cv-explorer/worker && npm run typecheck
 	cd tools/cv-explorer/web && npm run build

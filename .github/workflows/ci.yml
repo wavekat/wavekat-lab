@@ -75,7 +75,7 @@ jobs:
       - name: Job summary
         if: always()
         run: |
-          echo "## CV Explorer" >> "$GITHUB_STEP_SUMMARY"
+          echo "## Common Voice Explorer" >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
           node --version >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
