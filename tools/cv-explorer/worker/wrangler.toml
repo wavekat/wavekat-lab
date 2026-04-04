@@ -4,6 +4,7 @@ compatibility_date = "2025-04-01"
 
 [assets]
 directory = "../web/dist"
+binding = "ASSETS"
 
 [vars]
 GITHUB_CLIENT_ID = "Ov23litnU5zSh4lIRhZr"
