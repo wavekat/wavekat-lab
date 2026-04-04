@@ -1009,7 +1009,7 @@ dependencies = [
 
 [[package]]
 name = "lab"
-version = "0.0.9"
+version = "0.0.10"
 dependencies = [
  "axum",
  "clap 4.6.0",
