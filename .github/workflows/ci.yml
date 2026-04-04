@@ -55,3 +55,27 @@ jobs:
           node --version >> "$GITHUB_STEP_SUMMARY"
           npm --version >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
+
+  cv-explorer:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: |
+            tools/cv-explorer/worker/package-lock.json
+            tools/cv-explorer/web/package-lock.json
+      - run: npm ci
+        working-directory: tools/cv-explorer/worker
+      - run: npm ci
+        working-directory: tools/cv-explorer/web
+      - run: make ci-cv-explorer
+      - name: Job summary
+        if: always()
+        run: |
+          echo "## CV Explorer" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          node --version >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
