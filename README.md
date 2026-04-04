@@ -93,9 +93,9 @@ The Rust backend handles all audio capture and processing; the React frontend is
 
 ## Tools
 
-### [Common Voice Explorer](tools/cv-explorer/)
+### Common Voice Explorer
 
-A web app for browsing and playing audio clips from the [Mozilla Common Voice](https://commonvoice.mozilla.org) dataset. Filter by locale, split, demographics, and search sentences — with waveform playback powered by WaveSurfer.js.
+A web app for browsing and playing audio clips from the [Mozilla Common Voice](https://commonvoice.mozilla.org) dataset. Filter by locale, split, demographics, and search sentences — with waveform playback powered by WaveSurfer.js. [Source](tools/cv-explorer/)
 
 https://commonvoice-explorer.wavekat.com/
 
