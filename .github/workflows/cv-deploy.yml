@@ -1,0 +1,43 @@
+name: "CV Explorer: Deploy"
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "tools/cv-explorer/worker/**"
+      - "tools/cv-explorer/web/**"
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            tools/cv-explorer/worker/package-lock.json
+            tools/cv-explorer/web/package-lock.json
+
+      - name: Install dependencies
+        run: |
+          cd tools/cv-explorer/worker && npm ci
+          cd ../web && npm ci
+
+      - name: Run D1 migrations
+        run: cd tools/cv-explorer/worker && npx wrangler d1 migrations apply cv-explorer --remote
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+
+      - name: Build frontend
+        run: cd tools/cv-explorer/web && npm run build
+
+      - name: Deploy worker
+        run: cd tools/cv-explorer/worker && npx wrangler deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}

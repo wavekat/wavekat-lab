@@ -1,0 +1,28 @@
+name = "cv-explorer-api"
+main = "src/index.ts"
+compatibility_date = "2025-04-01"
+
+[assets]
+directory = "../web/dist"
+binding = "ASSETS"
+html_handling = "none"
+not_found_handling = "none"
+
+[vars]
+GITHUB_CLIENT_ID = "Ov23litnU5zSh4lIRhZr"
+TERMS_VERSION = "cv-2024-12"
+
+# Secrets (via `wrangler secret put`): GITHUB_CLIENT_SECRET, JWT_SECRET
+# Local dev: override all three in .dev.vars (separate OAuth app for localhost callback)
+
+[[d1_databases]]
+binding = "DB"
+database_name = "cv-explorer"
+database_id = "011e608e-6925-4f6d-ae88-e4ecfb92df29"
+migrations_dir = "migrations"
+remote = true
+
+[[r2_buckets]]
+binding = "AUDIO"
+bucket_name = "cv-explorer"
+remote = true

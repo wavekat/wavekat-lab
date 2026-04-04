@@ -1,0 +1,132 @@
+name: "CV: Dataset Sync"
+
+on:
+  workflow_dispatch:
+    inputs:
+      dataset_id:
+        description: "Data Collective dataset ID (from URL on datacollective.mozillafoundation.org)"
+        required: true
+      split:
+        description: "Dataset split (or 'all' to sync everything)"
+        required: true
+        default: "all"
+        type: choice
+        options:
+          - all
+          - validated
+          - train
+          - dev
+          - test
+          - invalidated
+          - other
+      r2_concurrency:
+        description: "Number of concurrent R2 uploads"
+        required: false
+        default: "32"
+        type: choice
+        options:
+          - "8"
+          - "16"
+          - "32"
+          - "64"
+          - "128"
+          - "256"
+      runner:
+        description: "GitHub Actions runner"
+        required: false
+        default: "cv-sync"
+        type: choice
+        options:
+          - cv-sync
+          - ubuntu-latest
+          - ubuntu-latest-m
+          - ubuntu-latest-l
+      force:
+        description: "Force re-sync even if already synced"
+        required: false
+        default: false
+        type: boolean
+
+jobs:
+  sync:
+    runs-on: ${{ inputs.runner }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        run: npm ci
+        working-directory: tools/cv-explorer/scripts
+
+      - name: Sync dataset
+        run: |
+          npx tsx sync.ts \
+            --dataset-id "${{ inputs.dataset_id }}" \
+            --split "${{ inputs.split }}" \
+            --r2-concurrency "${{ inputs.r2_concurrency }}" \
+            ${{ inputs.force == true && '--force' || '' }}
+        working-directory: tools/cv-explorer/scripts
+        env:
+          DATACOLLECTIVE_API_KEY: ${{ secrets.DATACOLLECTIVE_API_KEY }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          D1_DATABASE_ID: ${{ secrets.CV_EXPLORER_D1_ID }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_BUCKET_NAME: ${{ vars.CV_EXPLORER_R2_BUCKET }}
+
+  cleanup:
+    runs-on: ubuntu-latest
+    needs: sync
+    if: false # Disabled during debugging — re-enable when stable
+    steps:
+      - name: Azure Login
+        uses: azure/login@v3
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Delete runner VM and associated resources
+        uses: azure/cli@v3
+        with:
+          inlineScript: |
+            set -euo pipefail
+
+            RG="${{ vars.AZURE_RESOURCE_GROUP }}"
+
+            # Find VMs with the cv-sync prefix
+            VMS=$(az vm list --resource-group "$RG" --query "[?starts_with(name, 'cv-sync-')].name" -o tsv)
+
+            for VM in $VMS; do
+              echo "Deleting VM: $VM"
+              az vm delete \
+                --resource-group "$RG" \
+                --name "$VM" \
+                --yes \
+                --force-deletion true
+
+              # Delete leftover networking resources (Azure auto-names these with suffixes)
+              echo "Deleting NSG: ${VM}NSG"
+              az network nsg delete --resource-group "$RG" --name "${VM}NSG" 2>/dev/null || true
+              echo "Deleting Public IP: ${VM}PublicIP"
+              az network public-ip delete --resource-group "$RG" --name "${VM}PublicIP" 2>/dev/null || true
+              echo "Deleting VNET: ${VM}VNET"
+              az network vnet delete --resource-group "$RG" --name "${VM}VNET" 2>/dev/null || true
+            done
+
+            echo "Cleanup complete."
+
+      - name: Job summary
+        run: |
+          cat >> "$GITHUB_STEP_SUMMARY" <<EOF
+          ## Dataset Sync Complete
+
+          | Setting | Value |
+          |---------|-------|
+          | **Dataset ID** | \`${{ inputs.dataset_id }}\` |
+          | **Split** | \`${{ inputs.split }}\` |
+
+          Runner VM has been cleaned up.
+          EOF

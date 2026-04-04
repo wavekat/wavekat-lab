@@ -1,4 +1,4 @@
-.PHONY: help setup setup-backend setup-frontend dev dev-frontend dev-backend check test fmt lint ci ci-backend ci-frontend
+.PHONY: help setup setup-backend setup-frontend dev dev-frontend dev-backend check test fmt lint ci ci-backend ci-frontend ci-cv-explorer
 
 help:
 	@echo "Available targets:"
@@ -67,3 +67,8 @@ ci-backend:
 # Run frontend CI checks (lint, build) — run setup-frontend first if deps are missing
 ci-frontend:
 	cd frontend && npm run lint && npm run build
+
+# Run Common Voice Explorer CI checks (typecheck worker + build web)
+ci-cv-explorer:
+	cd tools/cv-explorer/worker && npm run typecheck
+	cd tools/cv-explorer/web && npm run build
