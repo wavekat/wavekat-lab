@@ -4,7 +4,7 @@ A web app for browsing and playing audio clips from the [Mozilla Common Voice](h
 
 ## Demo
 
-[![Common Voice Explorer Demo](https://img.youtube.com/vi/8IScEH0ZJxA/0.jpg)](https://youtu.be/8IScEH0ZJxA)
+<a href="https://youtu.be/8IScEH0ZJxA"><img src="https://img.youtube.com/vi/8IScEH0ZJxA/0.jpg" alt="Common Voice Explorer Demo" width="320"></a>
 
 ## Architecture
 
