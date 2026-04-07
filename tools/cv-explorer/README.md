@@ -1,6 +1,10 @@
-# CV Explorer
+# Common Voice Explorer
 
 A web app for browsing and playing audio clips from the [Mozilla Common Voice](https://commonvoice.mozilla.org) dataset. Filter by locale, split, demographics, and more.
+
+## Demo
+
+🔗 [https://commonvoice-explorer.wavekat.com](https://commonvoice-explorer.wavekat.com) · [Watch on YouTube](https://youtu.be/8IScEH0ZJxA)
 
 ## Architecture
 
