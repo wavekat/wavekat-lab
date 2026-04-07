@@ -2,6 +2,10 @@
 
 A web app for browsing and playing audio clips from the [Mozilla Common Voice](https://commonvoice.mozilla.org) dataset. Filter by locale, split, demographics, and more.
 
+## Demo
+
+[![CV Explorer Demo](https://img.youtube.com/vi/8IScEH0ZJxA/0.jpg)](https://youtu.be/8IScEH0ZJxA)
+
 ## Architecture
 
 ```
