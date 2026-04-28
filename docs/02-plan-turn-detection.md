@@ -146,12 +146,12 @@ crate boundary is visible in the UI.
 ## Out of scope for this plan
 
 - **Text turn detection (LiveKit)** — requires a separate transcript input path that
-  doesn't exist yet. Tracked in `plan-general-lab.md` Phase 4.
+  doesn't exist yet. Tracked in `01-plan-general-lab.md` Phase 4.
 - **Model download infrastructure** — Pipecat model is embedded at build time via the
   existing `wavekat-turn` build script. Runtime lazy download is a future improvement
-  (see `plan-general-lab.md` Phase 2).
+  (see `01-plan-general-lab.md` Phase 2).
 - **Pipeline mode** — auto-feeding VAD speech events into turn detector. Tracked in
-  `plan-general-lab.md` Phase 5.
+  `01-plan-general-lab.md` Phase 5.
 
 ---
 
