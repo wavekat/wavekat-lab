@@ -6,6 +6,8 @@ task, picking up from a `wk exports adapt smart-turn` snapshot.
 | Notebook | Purpose |
 |---|---|
 | `01_load_export.ipynb` | Load Parquet shards, sanity-check splits / label balance / clip durations, audition a few clips. |
+| `02_train.ipynb` | Fine-tune `whisper-tiny` encoder + attention-pool head on `ds["train"]`, validate per epoch, save HF checkpoint. |
+| `03_eval.ipynb` | Held-out metrics on `ds["test"]`, ONNX FP32 export, INT8 static quantization, FP32-vs-INT8 latency benchmark. |
 
 ## Producing the input
 
@@ -29,3 +31,21 @@ wk exports adapt smart-turn \
 The notebooks default to `../../datasets/smart-turn-zh` relative to
 this directory — override `EXPORT_DIR` in the first code cell if your
 output landed elsewhere.
+
+## Training environment
+
+`02_train.ipynb` needs a GPU to be practical. The reference recipe
+(Azure NC4as_T4_v3, Tesla T4 16 GB, Docker + nvidia-container-toolkit,
+`whisper-tiny` encoder fine-tune) lives upstream at
+[pipecat-ai/smart-turn](https://github.com/pipecat-ai/smart-turn) and
+in the team's GPU-VM playbook — these notebooks adopt the same model
+architecture and quantization pipeline so artifacts are wire-compatible
+with pipecat consumers.
+
+Hyperparameters in `02_train.ipynb` are tuned for ~1k-sample exports
+(batch 16, 8 epochs, eval per epoch). For the upstream-scale 270k
+dataset, raise the batch size and drop epochs back to upstream defaults.
+
+`03_eval.ipynb` writes ONNX artifacts into
+`../../checkpoints/smart-turn-zh/onnx/`; the INT8 file is what plugs
+into pipecat's `SmartTurnAnalyzer` for on-device end-of-turn detection.
