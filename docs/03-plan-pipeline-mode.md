@@ -1,6 +1,6 @@
 # Plan: Pipeline Mode — VAD-Gated Turn Detection
 
-**Status:** Planning
+**Status:** Shipped in v0.0.5 (PR [#10](https://github.com/wavekat/wavekat-lab/pull/10))
 **Date:** 2026-03-29
 
 ---

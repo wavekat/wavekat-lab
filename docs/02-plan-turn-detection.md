@@ -1,6 +1,6 @@
 # Plan: Turn Detection in wavekat-lab
 
-**Status:** In progress
+**Status:** Shipped in v0.0.4 (PR [#8](https://github.com/wavekat/wavekat-lab/pull/8)) — multi-config Pipecat. LiveKit text-turn still deferred.
 **Date:** 2026-03-28
 
 ---

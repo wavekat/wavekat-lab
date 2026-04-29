@@ -56,7 +56,6 @@ Each config can also enable per-config preprocessing: high-pass filter, RNNoise 
 | Backend | Description | Input |
 |---------|-------------|-------|
 | **pipecat** | Pipecat Smart Turn v3 — audio-based EOU detection | 16 kHz PCM audio |
-| **livekit** | LiveKit Turn Detector — transcript-based EOU detection | ASR transcript text |
 
 ## Architecture
 
