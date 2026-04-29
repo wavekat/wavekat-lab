@@ -1,7 +1,6 @@
 # 03 — TTS-bootstrapped data synthesis
 
-**Status:** not started. Blocked on `01-measurement.md` and
-`02-warmstart.md`.
+**Status:** not started. Blocked on `02-warmstart.md`.
 
 **Goal:** scale from ~1k human samples to 10k–50k labeled samples by
 generating synthetic zh audio with TTS, evaluated strictly on the real
