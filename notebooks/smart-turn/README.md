@@ -3,6 +3,10 @@
 Workflow notebooks for the binary smart-turn (end-of-turn vs continuation)
 task, picking up from a `wk exports adapt smart-turn` snapshot.
 
+> Mission, improvement plan, and per-experiment writeups live in
+> [`docs/`](docs/). This README stays focused on the runnable workflow
+> and the at-a-glance scorecard; long-form research notes go in `docs/`.
+
 | File | Purpose |
 |---|---|
 | `01_load_export.ipynb` | Load Parquet shards, sanity-check splits / label balance / clip durations, audition a few clips. |
