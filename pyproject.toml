@@ -1,0 +1,15 @@
+[project]
+name = "wavekat-lab-notebooks"
+version = "0.0.0"
+description = "Jupyter notebook environment for wavekat-lab — training, validation, and dataset-splitting workflows."
+requires-python = ">=3.11"
+dependencies = [
+    "jupyterlab>=4.2",
+    "ipykernel>=6.29",
+    "numpy>=2.0",
+    "pandas>=2.2",
+    "scikit-learn>=1.5",
+    "matplotlib>=3.9",
+    "soundfile>=0.12",
+    "librosa>=0.10",
+]

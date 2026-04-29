@@ -125,6 +125,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "audio-lab"
+version = "0.0.10"
+dependencies = [
+ "axum",
+ "clap 4.6.0",
+ "cpal",
+ "futures",
+ "hound",
+ "mime_guess",
+ "rubato",
+ "rust-embed",
+ "rustfft",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tower-http",
+ "tracing",
+ "tracing-subscriber",
+ "wavekat-turn",
+ "wavekat-vad",
+]
+
+[[package]]
 name = "autocfg"
 version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1005,29 +1028,6 @@ checksum = "b49715b7073f385ba4bc528e5747d02e66cb39c6146efb66b781f131f0fb399c"
 dependencies = [
  "once_cell",
  "wasm-bindgen",
-]
-
-[[package]]
-name = "lab"
-version = "0.0.10"
-dependencies = [
- "axum",
- "clap 4.6.0",
- "cpal",
- "futures",
- "hound",
- "mime_guess",
- "rubato",
- "rust-embed",
- "rustfft",
- "serde",
- "serde_json",
- "tokio",
- "tower-http",
- "tracing",
- "tracing-subscriber",
- "wavekat-turn",
- "wavekat-vad",
 ]
 
 [[package]]

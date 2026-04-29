@@ -348,24 +348,29 @@ pub async fn handle_ws(socket: WebSocket) {
                             let msg_tx_pipeline = msg_tx.clone();
                             tokio::spawn(async move {
                                 while let Some(result) = pipeline_mode_rx.recv().await {
-                                    let (event, turn_state, turn_confidence, turn_latency_ms, audio_duration_ms) =
-                                        match &result.event {
-                                            pipeline::PipelineModeEvent::SpeechStart => {
-                                                ("speech_start".to_string(), None, None, None, None)
-                                            }
-                                            pipeline::PipelineModeEvent::SpeechEnd {
-                                                turn_state,
-                                                turn_confidence,
-                                                turn_latency_ms,
-                                                audio_duration_ms,
-                                            } => (
-                                                "speech_end".to_string(),
-                                                Some(turn_state.clone()),
-                                                Some(*turn_confidence),
-                                                Some(*turn_latency_ms),
-                                                Some(*audio_duration_ms),
-                                            ),
-                                        };
+                                    let (
+                                        event,
+                                        turn_state,
+                                        turn_confidence,
+                                        turn_latency_ms,
+                                        audio_duration_ms,
+                                    ) = match &result.event {
+                                        pipeline::PipelineModeEvent::SpeechStart => {
+                                            ("speech_start".to_string(), None, None, None, None)
+                                        }
+                                        pipeline::PipelineModeEvent::SpeechEnd {
+                                            turn_state,
+                                            turn_confidence,
+                                            turn_latency_ms,
+                                            audio_duration_ms,
+                                        } => (
+                                            "speech_end".to_string(),
+                                            Some(turn_state.clone()),
+                                            Some(*turn_confidence),
+                                            Some(*turn_latency_ms),
+                                            Some(*audio_duration_ms),
+                                        ),
+                                    };
                                     let msg = ServerMessage::Pipeline {
                                         config_id: result.config_id,
                                         timestamp_ms: result.timestamp_ms,
@@ -627,24 +632,29 @@ pub async fn handle_ws(socket: WebSocket) {
                     let msg_tx_pipeline = msg_tx.clone();
                     tokio::spawn(async move {
                         while let Some(result) = pipeline_mode_rx.recv().await {
-                            let (event, turn_state, turn_confidence, turn_latency_ms, audio_duration_ms) =
-                                match &result.event {
-                                    pipeline::PipelineModeEvent::SpeechStart => {
-                                        ("speech_start".to_string(), None, None, None, None)
-                                    }
-                                    pipeline::PipelineModeEvent::SpeechEnd {
-                                        turn_state,
-                                        turn_confidence,
-                                        turn_latency_ms,
-                                        audio_duration_ms,
-                                    } => (
-                                        "speech_end".to_string(),
-                                        Some(turn_state.clone()),
-                                        Some(*turn_confidence),
-                                        Some(*turn_latency_ms),
-                                        Some(*audio_duration_ms),
-                                    ),
-                                };
+                            let (
+                                event,
+                                turn_state,
+                                turn_confidence,
+                                turn_latency_ms,
+                                audio_duration_ms,
+                            ) = match &result.event {
+                                pipeline::PipelineModeEvent::SpeechStart => {
+                                    ("speech_start".to_string(), None, None, None, None)
+                                }
+                                pipeline::PipelineModeEvent::SpeechEnd {
+                                    turn_state,
+                                    turn_confidence,
+                                    turn_latency_ms,
+                                    audio_duration_ms,
+                                } => (
+                                    "speech_end".to_string(),
+                                    Some(turn_state.clone()),
+                                    Some(*turn_confidence),
+                                    Some(*turn_latency_ms),
+                                    Some(*audio_duration_ms),
+                                ),
+                            };
                             let msg = ServerMessage::Pipeline {
                                 config_id: result.config_id,
                                 timestamp_ms: result.timestamp_ms,

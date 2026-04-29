@@ -457,9 +457,7 @@ fn create_turn_detector(config: &TurnConfig) -> Result<Box<dyn AudioTurnDetector
 }
 
 /// Create a TurnController-wrapped detector from a config.
-fn create_turn_controller(
-    config: &TurnConfig,
-) -> Result<TurnController<PipecatSmartTurn>, String> {
+fn create_turn_controller(config: &TurnConfig) -> Result<TurnController<PipecatSmartTurn>, String> {
     match config.backend.as_str() {
         "pipecat" => {
             let detector = PipecatSmartTurn::new()

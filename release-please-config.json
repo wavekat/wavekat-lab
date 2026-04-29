@@ -8,11 +8,11 @@
       "extra-files": [
         {
           "type": "generic",
-          "path": "backend/Cargo.toml"
+          "path": "tools/audio-lab/backend/Cargo.toml"
         },
         {
           "type": "json",
-          "path": "frontend/package.json",
+          "path": "tools/audio-lab/frontend/package.json",
           "jsonpath": "$.version"
         }
       ]

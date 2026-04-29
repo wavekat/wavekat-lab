@@ -1,74 +1,44 @@
-.PHONY: help setup setup-backend setup-frontend dev dev-frontend dev-backend check test fmt lint ci ci-backend ci-frontend ci-cv-explorer
+.PHONY: help setup lab \
+        ci ci-audio-lab ci-cv-explorer \
+        audio-lab cv-explorer
 
 help:
-	@echo "Available targets:"
-	@echo "  setup           Install all dependencies (run once after clone)"
-	@echo "  setup-backend   Install cargo-watch"
-	@echo "  setup-frontend  Install npm dependencies"
-	@echo "  dev-backend     Run lab backend with auto-rebuild"
-	@echo "  dev-frontend    Run lab frontend dev server"
-	@echo "  dev             Instructions for running both"
-	@echo "  check           Check workspace compiles"
-	@echo "  test            Run all tests"
-	@echo "  fmt             Format code"
-	@echo "  lint            Run clippy with warnings as errors"
-	@echo "  ci              Run all CI checks (backend + frontend)"
-	@echo "  ci-backend      Run backend CI checks (fmt, clippy, test)"
-	@echo "  ci-frontend     Run frontend CI checks (lint, build)"
+	@echo "wavekat-lab — root targets (repo-wide). Per-tool targets live in each tool's Makefile."
+	@echo ""
+	@echo "Setup:"
+	@echo "  setup              Install all tool dependencies + Jupyter env"
+	@echo ""
+	@echo "Notebooks:"
+	@echo "  lab                Start Jupyter Lab on notebooks/"
+	@echo ""
+	@echo "CI:"
+	@echo "  ci                 Run CI for all tools"
+	@echo "  ci-audio-lab       → make -C tools/audio-lab ci"
+	@echo "  ci-cv-explorer     → make -C tools/cv-explorer ci  (cv-explorer's CI script)"
+	@echo ""
+	@echo "Per-tool development: cd into the tool and use its Makefile, e.g.:"
+	@echo "  cd tools/audio-lab && make help"
+	@echo "  cd tools/cv-explorer && make help"
 
-# Install all dependencies
-setup: setup-backend setup-frontend
+# ─── Repo-wide setup ──────────────────────────────────────────────────────────
 
-# Install cargo-watch for auto-rebuild
-setup-backend:
-	cargo install cargo-watch
+setup:
+	$(MAKE) -C tools/audio-lab install
+	$(MAKE) -C tools/cv-explorer install
+	uv sync
 
-# Install frontend npm dependencies
-setup-frontend:
-	cd frontend && . "$$NVM_DIR/nvm.sh" && nvm use && npm install
+# ─── Notebooks ────────────────────────────────────────────────────────────────
 
-# Run lab backend with auto-rebuild on file changes
-dev-backend:
-	cargo watch -x 'run -p lab'
+lab:
+	uv run jupyter lab notebooks/
 
-# Run lab frontend dev server (uses .nvmrc for Node version)
-dev-frontend:
-	cd frontend && . "$$NVM_DIR/nvm.sh" && nvm use && npm run dev
+# ─── CI (delegates to each tool) ──────────────────────────────────────────────
 
-# Run both frontend and backend (requires two terminals — use dev-backend + dev-frontend)
-dev:
-	@echo "Run 'make dev-backend' and 'make dev-frontend' in separate terminals"
+ci: ci-audio-lab ci-cv-explorer
 
-# Check workspace compiles
-check:
-	cargo check --workspace
+ci-audio-lab:
+	$(MAKE) -C tools/audio-lab ci
 
-# Run all tests
-test:
-	cargo test --workspace
-
-# Format code
-fmt:
-	cargo fmt --all
-
-# Lint
-lint:
-	cargo clippy --workspace -- -D warnings
-
-# Run all CI checks (backend + frontend)
-ci: ci-backend ci-frontend
-
-# Run backend CI checks (fmt, clippy, test)
-ci-backend:
-	cargo fmt --all -- --check
-	cargo clippy --workspace -- -D warnings
-	cargo test --workspace
-
-# Run frontend CI checks (lint, build) — run setup-frontend first if deps are missing
-ci-frontend:
-	cd frontend && npm run lint && npm run build
-
-# Run Common Voice Explorer CI checks (typecheck worker + build web)
 ci-cv-explorer:
 	cd tools/cv-explorer/worker && npm run typecheck
 	cd tools/cv-explorer/web && npm run build

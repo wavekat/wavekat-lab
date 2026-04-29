@@ -25,6 +25,7 @@ jobs:
 
       - name: Update Cargo.lock
         if: ${{ steps.release.outputs.pr }}
+        working-directory: tools/audio-lab
         run: |
           cargo update --workspace
           if git diff --quiet Cargo.lock; then
