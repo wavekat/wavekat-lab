@@ -10,3 +10,7 @@ dist/
 .venv/
 __pycache__/
 .ipynb_checkpoints/
+
+# wk exports — local snapshots and adapter outputs
+/snapshots/
+/datasets/

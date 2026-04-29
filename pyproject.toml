@@ -6,10 +6,14 @@ requires-python = ">=3.11"
 dependencies = [
     "jupyterlab>=4.2",
     "ipykernel>=6.29",
+    "ipywidgets>=8.1",
     "numpy>=2.0",
     "pandas>=2.2",
     "scikit-learn>=1.5",
     "matplotlib>=3.9",
     "soundfile>=0.12",
     "librosa>=0.10",
+    # 4.x switched audio decoding to torchcodec (drags in torch + ffmpeg);
+    # 3.x still uses the soundfile path we already depend on.
+    "datasets>=3.0,<4.0",
 ]
