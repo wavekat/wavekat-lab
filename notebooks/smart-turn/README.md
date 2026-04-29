@@ -32,6 +32,20 @@ The notebooks default to `../../datasets/smart-turn-zh` relative to
 this directory — override `EXPORT_DIR` in the first code cell if your
 output landed elsewhere.
 
+## Install heavy deps
+
+`02_train.ipynb` and `03_eval.ipynb` need PyTorch, transformers, and
+ONNX Runtime — these aren't in the lab's base env (the loader notebook
+doesn't need them). Pull them in via the `smart-turn` extras group:
+
+```sh
+uv sync --extra smart-turn
+# or:  pip install -e ".[smart-turn]"
+```
+
+After this you should be able to `import torch` from the same kernel
+JupyterLab is using (`uv run jupyter lab`).
+
 ## Training environment
 
 `02_train.ipynb` needs a GPU to be practical. The reference recipe
