@@ -35,19 +35,17 @@ output landed elsewhere.
 ## Install heavy deps
 
 `02_train.ipynb` and `03_eval.ipynb` need PyTorch, transformers, and
-ONNX Runtime — these aren't in the lab's base env (the loader notebook
-doesn't need them).
-
-Easiest path: **just run the notebook**. The second cell of each
-training/eval notebook is a guarded `%pip install` that fetches
-everything missing and is a no-op once they're available.
-
-If you'd rather lock the deps into the environment up front:
+ONNX Runtime. These aren't in the lab's base env (the loader notebook
+doesn't need them) — install them via the `smart-turn` extras group
+**before** launching JupyterLab:
 
 ```sh
 uv sync --extra smart-turn
 # or:  pip install -e ".[smart-turn]"
 ```
+
+Then start the kernel as usual (`uv run jupyter lab`) and Run-All
+should work end-to-end.
 
 ## Training environment
 
