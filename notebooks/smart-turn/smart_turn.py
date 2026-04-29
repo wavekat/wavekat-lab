@@ -336,3 +336,52 @@ def score_run(
         "f1": float(f1_score(labels, preds, zero_division=0)),
         "average_precision": float(average_precision_score(labels, probs)),
     }
+
+
+def score_onnx(
+    onnx_path: Path,
+    feature_extractor_source: str,
+    hf_test_split,
+    target_sr: int,
+    chunk_length: int,
+    threshold: float = 0.5,
+    input_name: str = "input_features",
+) -> dict:
+    """Score an external ONNX model on `hf_test_split`.
+
+    Used to compare against pretrained baselines like `pipecat-ai/smart-turn-v3`,
+    whose ONNX takes the same `(1, 80, chunk_length*100)` mel input we already
+    produce. `feature_extractor_source` is anything `WhisperFeatureExtractor.from_pretrained`
+    accepts (e.g. `"openai/whisper-tiny"`) — the upstream ONNX expects
+    Whisper-tiny's preprocessing, not ours.
+    """
+    import onnxruntime as ort
+    from transformers import WhisperFeatureExtractor
+
+    fe = WhisperFeatureExtractor.from_pretrained(feature_extractor_source)
+    dataset = SmartTurnDataset(
+        hf_test_split, fe, target_sr, chunk_length, augment=None,
+    )
+    sess = ort.InferenceSession(str(onnx_path), providers=["CPUExecutionProvider"])
+
+    probs, labels = [], []
+    for i in range(len(dataset)):
+        item = dataset[i]
+        feats = item["input_features"].unsqueeze(0).numpy()
+        out = sess.run(None, {input_name: feats})[0]
+        probs.append(float(np.squeeze(out)))
+        labels.append(int(item["labels"]))
+    probs = np.array(probs)
+    labels = np.array(labels, dtype=int)
+    preds = (probs > threshold).astype(int)
+
+    return {
+        "threshold": threshold,
+        "probs": probs,
+        "labels": labels,
+        "accuracy": float(accuracy_score(labels, preds)),
+        "precision": float(precision_score(labels, preds, zero_division=0)),
+        "recall": float(recall_score(labels, preds, zero_division=0)),
+        "f1": float(f1_score(labels, preds, zero_division=0)),
+        "average_precision": float(average_precision_score(labels, probs)),
+    }
