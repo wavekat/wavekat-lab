@@ -12,9 +12,8 @@ task, picking up from a `wk exports adapt smart-turn` snapshot.
 | `01_load_export.ipynb` | Load Parquet shards, sanity-check splits / label balance / clip durations, audition a few clips. |
 | `02_a_train_baseline.ipynb` | Baseline training run — pinned `pos_weight`, F1-best threshold sweep, no augmentation. |
 | `02_b_train_specaugment.ipynb` | Variant: + SpecAugment (time/freq masking on train mels). |
-| `02_c_zero_shot_upstream.ipynb` | Score `pipecat-ai/smart-turn-v3` ONNX directly on the zh test set — the floor any zh-specific model has to beat. No training. |
 | `02_<letter>_*.ipynb` | Add a new letter per experiment; thin notebook = config + run, all heavy code lives in `smart_turn.py`. |
-| `03_compare.ipynb` | Eval step. Score every `02_<letter>_*` checkpoint on `ds["test"]` at its shipped threshold; emits a side-by-side metrics table + overlaid PR curves so you can pick a winner. |
+| `03_compare.ipynb` | Eval step. Score every `02_<letter>_*` checkpoint on `ds["test"]` at its shipped threshold, plus the upstream `pipecat-ai/smart-turn-v3` ONNX as the zero-shot floor. Emits a side-by-side metrics table + overlaid PR curves so you can pick a winner. |
 | `04_export.ipynb` | Export step — only run after picking a winner in `03_compare`. ONNX FP32 export, INT8 static quantization, FP32-vs-INT8 drift on test, CPU latency benchmark. |
 | `smart_turn.py` | Shared module: `SmartTurnModel`, `SmartTurnDataset`, `spec_augment`, `compute_metrics_with_threshold`, `evaluate_and_save_threshold`, `score_run`, `score_onnx`, etc. The `02_*` / `03_*` / `04_*` notebooks import from here so they stay thin and the model definition lives in one place. |
 

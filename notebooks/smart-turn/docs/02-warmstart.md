@@ -12,17 +12,19 @@ synthesis pipeline weakens significantly.
 
 ## Most important things to do
 
-- [x] **Zero-shot upstream baseline.** Score `pipecat-ai/smart-turn-v3`
-      ONNX directly on the zh test set with `score_onnx`. This is the
-      floor a zh-specific model has to beat. Notebook:
-      `02_c_zero_shot_upstream.ipynb`.
+- [x] **Zero-shot upstream baseline.** Already wired into
+      `03_compare.ipynb` as the `pipecat-v3` row (downloads
+      `smart-turn-v3.2-cpu.onnx`, scores via `score_onnx`, gated by
+      `INCLUDE_PIPECAT = True`). No separate notebook needed — the
+      floor sits next to our trained checkpoints in the same
+      comparison table.
 - [ ] **Warm-start fine-tune. BLOCKED — needs proper ONNX → PyTorch
       port.** Hypothesis still stands (the 270k turn-taking prior
       should transfer despite being English), but the simple direct
       `from_pretrained` path is closed off. See "Warm-start blocker"
       below. Defer until the porter is built or upstream publishes
       PyTorch weights.
-- [ ] **Audio augmentation.** New `02_d_train_audioaug.ipynb` adding
+- [ ] **Audio augmentation.** New `02_c_train_audioaug.ipynb` adding
       noise mix and gain perturbation on top of SpecAugment.
       Independent of the warm-start blocker — promote to next
       concrete deliverable for this phase.
