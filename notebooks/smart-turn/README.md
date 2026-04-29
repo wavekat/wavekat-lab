@@ -36,15 +36,18 @@ output landed elsewhere.
 
 `02_train.ipynb` and `03_eval.ipynb` need PyTorch, transformers, and
 ONNX Runtime — these aren't in the lab's base env (the loader notebook
-doesn't need them). Pull them in via the `smart-turn` extras group:
+doesn't need them).
+
+Easiest path: **just run the notebook**. The second cell of each
+training/eval notebook is a guarded `%pip install` that fetches
+everything missing and is a no-op once they're available.
+
+If you'd rather lock the deps into the environment up front:
 
 ```sh
 uv sync --extra smart-turn
 # or:  pip install -e ".[smart-turn]"
 ```
-
-After this you should be able to `import torch` from the same kernel
-JupyterLab is using (`uv run jupyter lab`).
 
 ## Training environment
 
