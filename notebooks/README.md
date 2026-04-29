@@ -16,8 +16,9 @@ make lab               # or: uv run jupyter lab notebooks/   (from repo root)
 
 ## Layout
 
-Organize notebooks by purpose. Suggested folders (create as needed):
+Organize notebooks by purpose. Existing and suggested folders:
 
+- `smart-turn/` — load + train + eval the binary smart-turn task from a `wk exports adapt smart-turn` snapshot. See [`smart-turn/README.md`](smart-turn/README.md).
 - `training/` — model training experiments
 - `validation/` — eval runs and metric reporting
 - `dataset-splits/` — train/dev/test partitioning logic
