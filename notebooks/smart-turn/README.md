@@ -104,8 +104,8 @@ exported). Always paste both.
 |---|---|---|---|---|---|---|---|
 | 1 | _legacy_ | pre-refactor `02_train.ipynb`, per-batch pos_weight, fixed thr=0.5 | 0.50 | 0.8125 (ep 8) | 0.788 / 0.839 | _not recorded_ | First reference run. Removed by the smart_turn.py refactor. |
 | 2 | _legacy_ | pre-refactor `02_train.ipynb`, + threshold sweep + pinned pos_weight | 0.41 (swept) | 0.7826 (ep 5) | 0.711 / 0.871 | _not recorded_ | PR-curve AP=0.768. F1 vs run 1 is within val noise; the win is the calibrated operating point. |
-| 3 | `baseline` | `02_a_train_baseline.ipynb` | _tbd_ | _not yet run_ | — | — | Refactored thin notebook; conceptually equivalent to run 2. |
-| 4 | `specaugment` | `02_b_train_specaugment.ipynb` | _tbd_ | _not yet run_ | — | — | + SpecAugment time 2×40, freq 2×15. Expect F1-vs-threshold plateau to widen; may need `EPOCHS=12`. |
+| 3 | `baseline` | `02_a_train_baseline.ipynb` | 0.38 (swept) | _see compare_ | — | 0.643 / _not exported_ | Refactored thin notebook, conceptually equivalent to run 2. Test AP=0.702. |
+| 4 | `specaugment` | `02_b_train_specaugment.ipynb` | 0.44 (swept) | _see compare_ | — | **0.691** / _tbd_ | + SpecAugment time 2×40, freq 2×15. Test AP=0.722. **Winner** — beats baseline on F1 (+4.8pt), precision, recall, AP. Export this. |
 
 What's been won so far independent of val noise:
 
