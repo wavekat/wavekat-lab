@@ -12,5 +12,7 @@ dependencies = [
     "matplotlib>=3.9",
     "soundfile>=0.12",
     "librosa>=0.10",
-    "datasets>=3.0",
+    # 4.x switched audio decoding to torchcodec (drags in torch + ffmpeg);
+    # 3.x still uses the soundfile path we already depend on.
+    "datasets>=3.0,<4.0",
 ]
