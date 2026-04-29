@@ -1,4 +1,4 @@
-.PHONY: help setup lab \
+.PHONY: help setup setup-notebooks lab \
         ci ci-audio-lab ci-cv-explorer \
         audio-lab cv-explorer
 
@@ -7,6 +7,7 @@ help:
 	@echo ""
 	@echo "Setup:"
 	@echo "  setup              Install all tool dependencies + Jupyter env"
+	@echo "  setup-notebooks    Install Jupyter notebook deps via uv"
 	@echo ""
 	@echo "Notebooks:"
 	@echo "  lab                Start Jupyter Lab on notebooks/"
@@ -22,9 +23,11 @@ help:
 
 # ─── Repo-wide setup ──────────────────────────────────────────────────────────
 
-setup:
+setup: setup-notebooks
 	$(MAKE) -C tools/audio-lab install
 	$(MAKE) -C tools/cv-explorer install
+
+setup-notebooks:
 	uv sync
 
 # ─── Notebooks ────────────────────────────────────────────────────────────────
