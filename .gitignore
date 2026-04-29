@@ -14,3 +14,4 @@ __pycache__/
 # wk exports — local snapshots and adapter outputs
 /snapshots/
 /datasets/
+/checkpoints/

@@ -29,6 +29,19 @@ When adding a new notebook:
 Don't put the banner inside the title cell — keep them separate so the
 banner stays editable as one unit if the brand asset URL ever changes.
 
+## Cell completion marker
+
+Every code cell **must** end with a `print("✅ <short message>")` as its
+last line. Notebooks are run cell-by-cell — the checkmark gives the
+reader a clear "this cell finished cleanly, move on" signal without
+having to scan the output.
+
+Pair the checkmark with a meaningful one-line summary of what the cell
+just did (`"✅ dataset loaded"`, `"✅ model initialised"`,
+`"✅ checkpoint saved"`) — a bare `"✅"` is uninformative. Cells that
+already print structured info above should still tail with one summary
+line carrying the checkmark.
+
 ## Cell outputs
 
 Default to **committing executed outputs** (the Roboflow / fast.ai
