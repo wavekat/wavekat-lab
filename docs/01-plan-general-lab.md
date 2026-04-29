@@ -3,6 +3,15 @@
 **Status:** In progress
 **Date:** 2026-03-28
 
+> **2026-04-29 update:** repo reorganized into a tool-per-folder layout. The
+> `backend/` and `frontend/` referenced throughout this doc now live at
+> `tools/audio-lab/backend/` and `tools/audio-lab/frontend/`. The Cargo
+> workspace (Cargo.toml + Cargo.lock + .cargo/) moved with them — there is no
+> longer a Rust workspace at the repo root. The crate was renamed `lab` → `audio-lab`.
+> Each tool has its own Makefile: run `cd tools/audio-lab && make dev-backend`
+> (or `make -C tools/audio-lab dev-backend`). The root Makefile is now repo-wide
+> only — `make setup`, `make ci`, and `make lab` (Jupyter on `notebooks/`).
+
 ---
 
 ## Decisions made
@@ -131,11 +140,11 @@ size_mb  = 400
 **`make setup-models` target** — pre-downloads all models for offline use:
 ```makefile
 setup-models:
-    cargo run -p lab -- download-models --all
+    cargo run -p audio-lab -- download-models --all
 ```
 Can also target specific models:
 ```bash
-cargo run -p lab -- download-models --model pipecat-smart-turn-v3
+cargo run -p audio-lab -- download-models --model pipecat-smart-turn-v3
 ```
 
 ### Why not build-time download (current wavekat-vad pattern)?

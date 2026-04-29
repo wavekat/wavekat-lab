@@ -124,7 +124,7 @@ async fn index_handler() -> Html<&'static str> {
 <head><title>WaveKat Lab</title></head>
 <body>
     <h1>WaveKat Lab</h1>
-    <p>Frontend not yet built. Run <code>npm run dev</code> in <code>frontend/</code> for the dev server.</p>
+    <p>Frontend not yet built. Run <code>make dev-frontend</code> from <code>tools/audio-lab/</code> for the dev server.</p>
     <p>WebSocket endpoint: <code>ws://localhost:3000/ws</code></p>
 </body>
 </html>"#,

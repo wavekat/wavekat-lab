@@ -1,5 +1,5 @@
 [package]
-name = "lab"
+name = "audio-lab"
 version = "0.0.10" # x-release-please-version
 edition = "2021"
 

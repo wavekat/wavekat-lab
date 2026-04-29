@@ -6,100 +6,54 @@
 
 [![CI](https://github.com/wavekat/wavekat-lab/actions/workflows/ci.yml/badge.svg)](https://github.com/wavekat/wavekat-lab/actions/workflows/ci.yml)
 [![Release Please](https://github.com/wavekat/wavekat-lab/actions/workflows/release-please.yml/badge.svg)](https://github.com/wavekat/wavekat-lab/actions/workflows/release-please.yml)
-[![DeepWiki](https://img.shields.io/badge/DeepWiki-wavekat%2Fwavekat--lab-blue.svg?logo=data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACwAAAAyCAYAAAAnWDnqAAAAAXNSR0IArs4c6QAAA05JREFUaEPtmUtyEzEQhtWTQyQLHNak2AB7ZnyXZMEjXMGeK/AIi+QuHrMnbChYY7MIh8g01fJoopFb0uhhEqqcbWTp06/uv1saEDv4O3n3dV60RfP947Mm9/SQc0ICFQgzfc4CYZoTPAswgSJCCUJUnAAoRHOAUOcATwbmVLWdGoH//PB8mnKqScAhsD0kYP3j/Yt5LPQe2KvcXmGvRHcDnpxfL2zOYJ1mFwrryWTz0advv1Ut4CJgf5uhDuDj5eUcAUoahrdY/56ebRWeraTjMt/00Sh3UDtjgHtQNHwcRGOC98BJEAEymycmYcWwOprTgcB6VZ5JK5TAJ+fXGLBm3FDAmn6oPPjR4rKCAoJCal2eAiQp2x0vxTPB3ALO2CRkwmDy5WohzBDwSEFKRwPbknEggCPB/imwrycgxX2NzoMCHhPkDwqYMr9tRcP5qNrMZHkVnOjRMWwLCcr8ohBVb1OMjxLwGCvjTikrsBOiA6fNyCrm8V1rP93iVPpwaE+gO0SsWmPiXB+jikdf6SizrT5qKasx5j8ABbHpFTx+vFXp9EnYQmLx02h1QTTrl6eDqxLnGjporxl3NL3agEvXdT0WmEost648sQOYAeJS9Q7bfUVoMGnjo4AZdUMQku50McDcMWcBPvr0SzbTAFDfvJqwLzgxwATnCgnp4wDl6Aa+Ax283gghmj+vj7feE2KBBRMW3FzOpLOADl0Isb5587h/U4gGvkt5v60Z1VLG8BhYjbzRwyQZemwAd6cCR5/XFWLYZRIMpX39AR0tjaGGiGzLVyhse5C9RKC6ai42ppWPKiBagOvaYk8lO7DajerabOZP46Lby5wKjw1HCRx7p9sVMOWGzb/vA1hwiWc6jm3MvQDTogQkiqIhJV0nBQBTU+3okKCFDy9WwferkHjtxib7t3xIUQtHxnIwtx4mpg26/HfwVNVDb4oI9RHmx5WGelRVlrtiw43zboCLaxv46AZeB3IlTkwouebTr1y2NjSpHz68WNFjHvupy3q8TFn3Hos2IAk4Ju5dCo8B3wP7VPr/FGaKiG+T+v+TQqIrOqMTL1VdWV1DdmcbO8KXBz6esmYWYKPwDL5b5FA1a0hwapHiom0r/cKaoqr+27/XcrS5UwSMbQAAAABJRU5ErkJggg==)](https://deepwiki.com/wavekat/wavekat-lab)
+[![DeepWiki](https://img.shields.io/badge/DeepWiki-wavekat%2Fwavekat--lab-blue.svg?logo=data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACwAAAAyCAYAAAAnWDnqAAAAAXNSR0IArs4c6QAAA05JREFUaEPtmUtyEzEQhtWTQyQLHNak2AB7ZnyXZMEjXMGeK/AIi+QuHrMnbChYY7MIh8g01fJoopFb0uhhEqqcbWTp06/uv1Utc/q9QCLuQAA9qVDnAU/UMM85L9xdz4SUL40e1jY4C9TF9mZAlpSEvAwk0VjDplPV9Frz2QILOWZKrk9aDAvHwYdb1OanbS3GG93sgYda8L3LjarS44V97ttH7sb6MQ93+0zdXamE6T/wgxTVw+OqzC72QoP3/eSj7t9Z6/u9zZ69m9R0vXoRPj/27POtCAvhT4Q+rhTPpBR0eDwa6+gqSAOBNQ2cnLHLA8CTTooP4FsXjB/0gMSCYtCdjlA86yZdTesOnXFGPDQrxPnHlkdoAvcAKt6QcRRRcVMuaSmDDR60Qh3RCtq+SwxlRBC6FlYxywkB87DDYtBIB2UFBR3KqZBrvBEsIotUGABQU2T0J5WtuYbJ8WPYI/hINb3a/zoBqMZqIXBT6GHRzfh0BTEegYGCBfMsZ2gjBhd7EYQYJoQRoLiCjRKLGJYsZUSF2nGLEFAjBEhNnnAj+t7iY67vkfLRfyfFhPlKDHvOPb09nRchALYUFK0RNNpwGZB/Cqc5n7DCB2yKTTMKNkPjUGbuI4nlmt1aKGZ8KaJZWyFnq5HIQyHbAdDESlF5NbCv4kzD6Bv8bqu+dsAkeyzAyDSITkmd1kAiSdCxx1QClrEjlLaXfPcJrPC+QDdLejQH7nTNMu9TzRoRtaaUEYwdFcc8nCOWaCpQ9aQDz1qaPZQ+dN7GGudSnrPcgZcfEv5MMHTOehB1RHAR3DEWsSQTBg2YvtinoZv4LWRYFCT89DKn9oQq8sYnWl5g0SC9j1MUMbBIRFCFCjGXxrh2KqnwM7t9CPhDS0KShKJI24+yNxvTDnE96b/hPV8AKf++78ehs4UWjfFaP/wEZbfJ5p2gQAAAAABJRU5ErkJggg==)](https://deepwiki.com/wavekat/wavekat-lab)
 
-A web-based experimentation tool for testing and comparing [WaveKat](https://github.com/wavekat) library backends — VAD, turn detection, and more — side by side in real time.
+A research repo for the [WaveKat](https://github.com/wavekat) project — interactive tools and Jupyter notebooks for working with audio models (VAD, turn detection, voice datasets, and more).
 
 > [!WARNING]
 > Early development. Things may change.
 
-## What It Does
-
-- **Live recording** — capture audio from your microphone server-side, stream results to the browser in real time
-- **File analysis** — upload a WAV file and run multiple configs against it at full speed
-- **Side-by-side comparison** — fan out audio to N configurations simultaneously and compare outputs
-- **Preprocessing exploration** — apply high-pass filters, RNNoise denoising, or normalization per-config
-- **Interactive visualization** — waveform, spectrogram, and probability timelines with synchronized zoom, pan, and hover
-
-## Quick Start
-
-```bash
-make setup         # one-time: install dependencies
-
-make dev-frontend  # Terminal 1: frontend (http://localhost:5173)
-make dev-backend   # Terminal 2: backend with auto-rebuild (http://localhost:3000)
-```
-
-### CLI Options
+## What's In Here
 
 ```
---host <HOST>    Bind address (default: 127.0.0.1)
---port <PORT>    Listen port (default: 3000)
+wavekat-lab/
+├── tools/
+│   ├── audio-lab/     Real-time VAD + Turn Detection comparison app (Rust + React)
+│   └── cv-explorer/   Mozilla Common Voice dataset browser (Cloudflare Workers + React)
+├── notebooks/         Jupyter notebooks (training, validation, dataset splits)
+└── docs/              Plans and design docs
 ```
 
-## Supported Backends
-
-### VAD
-
-| Backend | Description | Key Parameters |
-|---------|-------------|----------------|
-| **webrtc-vad** | Google's WebRTC VAD — fast, low latency | Mode: quality, low-bitrate, aggressive, very-aggressive |
-| **silero-vad** | Neural network VAD via ONNX Runtime — higher accuracy | Threshold: 0.0–1.0 |
-| **ten-vad** | TEN framework VAD | Threshold: 0.0–1.0 |
-| **firered-vad** | Xiaohongshu's FireRedVAD using DFSMN architecture | Threshold: 0.0–1.0 |
-
-Each config can also enable per-config preprocessing: high-pass filter, RNNoise denoising, normalization.
-
-### Turn Detection
-
-| Backend | Description | Input |
-|---------|-------------|-------|
-| **pipecat** | Pipecat Smart Turn v3 — audio-based EOU detection | 16 kHz PCM audio |
-| **livekit** | LiveKit Turn Detector — transcript-based EOU detection | ASR transcript text |
-
-## Architecture
-
-The Rust backend handles all audio capture and processing; the React frontend is embedded in the binary and handles visualization only.
-
-```
-┌─────────────────────────────────┐
-│  Browser (React)                │
-│  Waveform + Spectrogram +       │
-│  Timelines + Config Panel       │
-└──────────┬──────────────────────┘
-           │ WebSocket
-┌──────────▼──────────────────────┐
-│  Server (Rust / Axum)           │
-│  ┌────────────┐  ┌────────────┐ │
-│  │ Mic Capture │  │ WAV Loader │ │
-│  │   (cpal)    │  │  (hound)   │ │
-│  └─────┬──────┘  └─────┬──────┘ │
-│        └──────┬─────────┘        │
-│        ┌──────▼──────┐           │
-│        │ Audio Frames │          │
-│        └──────┬──────┘           │
-│     ┌─────────┼─────────┐       │
-│     ▼         ▼         ▼       │
-│  Config 1  Config 2  Config N   │
-│     │         │         │       │
-│     └─────────┼─────────┘       │
-│          ┌────▼────┐             │
-│          │ Results  │            │
-│          └────┬────┘             │
-└───────────────┼──────────────────┘
-                ▼
-           Browser UI
-```
+Each tool is self-contained — its own Makefile, lockfiles, and build setup live inside its folder.
 
 ## Tools
 
-### Common Voice Explorer
+### [Audio Lab](tools/audio-lab/) — `tools/audio-lab/`
 
-A web app for browsing and playing audio clips from the [Mozilla Common Voice](https://commonvoice.mozilla.org) dataset. Filter by locale, split, demographics, and search sentences — with waveform playback powered by WaveSurfer.js. [Source](tools/cv-explorer/)
+Web app for testing and comparing WaveKat library backends side by side in real time. Live mic capture, WAV upload, multi-config fan-out, VAD-gated pipeline mode, waveform + spectrogram + probability timelines.
 
-https://commonvoice-explorer.wavekat.com/
+Backends: webrtc-vad, silero-vad, ten-vad, firered-vad, pipecat smart-turn. [Details →](tools/audio-lab/README.md)
 
-Built on Cloudflare Workers + D1 + R2, with GitHub OAuth and a React 19 frontend.
+### [Common Voice Explorer](tools/cv-explorer/) — `tools/cv-explorer/`
+
+Web app for browsing and playing audio clips from the [Mozilla Common Voice](https://commonvoice.mozilla.org) dataset. Filter by locale, split, demographics, and search sentences — with waveform playback powered by WaveSurfer.js. Built on Cloudflare Workers + D1 + R2. [Details →](tools/cv-explorer/README.md)
+
+Live: <https://commonvoice-explorer.wavekat.com/>
+
+## Notebooks
+
+`notebooks/` is the home for Jupyter notebooks covering training, validation, and dataset-splitting workflows. Python env is managed by [uv](https://docs.astral.sh/uv/).
+
+```bash
+make setup-notebooks   # one-time: uv sync the notebook env
+make lab               # start Jupyter Lab on notebooks/
+```
+
+## Repo Layout Conventions
+
+- **Per-tool Makefiles** — `tools/<name>/Makefile` owns dev/build/CI for that tool. Run `cd tools/<name> && make help` to see what's there.
+- **Root Makefile** — repo-wide only: `setup`, `lab`, `ci`, and per-tool CI delegators.
+- **No shared Cargo workspace at root** — each Rust tool keeps its own `Cargo.toml` / `Cargo.lock` / `target/` inside its folder.
 
 ## Videos
 

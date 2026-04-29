@@ -1,5 +1,5 @@
-/target
-.cargo/config.toml
+target/
+**/.cargo/config.toml
 node_modules/
 dist/
 .env
@@ -7,3 +7,6 @@ dist/
 .wrangler/
 .dev.vars
 *.tsbuildinfo
+.venv/
+__pycache__/
+.ipynb_checkpoints/

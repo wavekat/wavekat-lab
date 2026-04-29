@@ -1,6 +1,6 @@
 # Plan: Pipeline Mode — VAD-Gated Turn Detection
 
-**Status:** Planning
+**Status:** Shipped in v0.0.5 (PR [#10](https://github.com/wavekat/wavekat-lab/pull/10))
 **Date:** 2026-03-29
 
 ---
@@ -326,7 +326,7 @@ can observe both timelines side-by-side.
   references a given Turn config wins. Running two VAD backends against one Turn detector
   simultaneously would cause interleaved reset/predict calls; this requires a queuing layer
   not designed here.
-- **Text turn detection** — no transcript input path exists yet (see `plan-general-lab.md`).
+- **Text turn detection** — no transcript input path exists yet (see `01-plan-general-lab.md`).
 - **Confidence threshold on Turn** — some users may want to only surface predictions above a
   confidence threshold. Deferred; the raw predictions are always shown.
 

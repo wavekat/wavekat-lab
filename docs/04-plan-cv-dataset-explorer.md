@@ -1,6 +1,6 @@
 # Plan: Common Voice Dataset Explorer
 
-**Status:** Planning
+**Status:** Shipped in v0.0.10 (PR [#24](https://github.com/wavekat/wavekat-lab/pull/24)). Live at <https://commonvoice-explorer.wavekat.com/>.
 **Date:** 2026-04-03
 
 ---
