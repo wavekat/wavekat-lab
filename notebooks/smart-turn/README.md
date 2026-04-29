@@ -9,13 +9,26 @@ task, picking up from a `wk exports adapt smart-turn` snapshot.
 | `02_a_train_baseline.ipynb` | Baseline training run — pinned `pos_weight`, F1-best threshold sweep, no augmentation. |
 | `02_b_train_specaugment.ipynb` | Variant: + SpecAugment (time/freq masking on train mels). |
 | `02_<letter>_*.ipynb` | Add a new letter per experiment; thin notebook = config + run, all heavy code lives in `smart_turn.py`. |
-| `03_eval.ipynb` | Held-out metrics on `ds["test"]`, ONNX FP32 export, INT8 static quantization, FP32-vs-INT8 latency benchmark. Set `RUN_NAME` to pick which `02_<letter>_*` checkpoint to evaluate. |
-| `smart_turn.py` | Shared module: `SmartTurnModel`, `SmartTurnDataset`, `spec_augment`, `compute_metrics_with_threshold`, `evaluate_and_save_threshold`, etc. The `02_*` notebooks import from here so they stay thin and the model definition lives in one place. |
+| `03_compare.ipynb` | Eval step. Score every `02_<letter>_*` checkpoint on `ds["test"]` at its shipped threshold; emits a side-by-side metrics table + overlaid PR curves so you can pick a winner. |
+| `04_export.ipynb` | Export step — only run after picking a winner in `03_compare`. ONNX FP32 export, INT8 static quantization, FP32-vs-INT8 drift on test, CPU latency benchmark. |
+| `smart_turn.py` | Shared module: `SmartTurnModel`, `SmartTurnDataset`, `spec_augment`, `compute_metrics_with_threshold`, `evaluate_and_save_threshold`, `score_run`, etc. The `02_*` / `03_*` / `04_*` notebooks import from here so they stay thin and the model definition lives in one place. |
 
 Each `02_<letter>_*` run writes to its own subdir under
 `checkpoints/<dataset>/<run>/` (e.g. `checkpoints/smart-turn-zh/baseline/`)
-along with a `threshold.json`. `03_eval.ipynb` reads that subdir based on
-the `RUN_NAME` you pick.
+along with a `threshold.json`. `03_compare` reads them all in one pass;
+`04_export` reads just the winner you point `RUN_NAME` at.
+
+The full flow:
+
+```
+01_load_export.ipynb       (once per snapshot)
+   ↓
+02_a / 02_b / 02_c / ...   (one notebook per training variant)
+   ↓
+03_compare.ipynb           (eval all variants on ds["test"], pick a winner)
+   ↓
+04_export.ipynb            (ship the winner: ONNX + INT8 + bench)
+```
 
 ## Producing the input
 
@@ -42,10 +55,10 @@ output landed elsewhere.
 
 ## Install heavy deps
 
-`02_train.ipynb` and `03_eval.ipynb` need PyTorch, transformers, and
-ONNX Runtime. These aren't in the lab's base env (the loader notebook
-doesn't need them) — install them via the `smart-turn` extras group
-**before** launching JupyterLab:
+The `02_*` / `03_compare.ipynb` / `04_export.ipynb` notebooks need
+PyTorch, transformers, and ONNX Runtime. These aren't in the lab's
+base env (the loader notebook doesn't need them) — install them via
+the `smart-turn` extras group **before** launching JupyterLab:
 
 ```sh
 uv sync --extra smart-turn
@@ -57,20 +70,22 @@ should work end-to-end.
 
 ## Training environment
 
-`02_train.ipynb` needs a GPU to be practical. The reference recipe
-(Azure NC4as_T4_v3, Tesla T4 16 GB, Docker + nvidia-container-toolkit,
-`whisper-tiny` encoder fine-tune) lives upstream at
+The `02_<letter>_*.ipynb` training notebooks need a GPU to be
+practical. The reference recipe (Azure NC4as_T4_v3, Tesla T4 16 GB,
+Docker + nvidia-container-toolkit, `whisper-tiny` encoder fine-tune)
+lives upstream at
 [pipecat-ai/smart-turn](https://github.com/pipecat-ai/smart-turn) and
 in the team's GPU-VM playbook — these notebooks adopt the same model
 architecture and quantization pipeline so artifacts are wire-compatible
 with pipecat consumers.
 
-Hyperparameters in `02_train.ipynb` are tuned for ~1k-sample exports
-(batch 16, 8 epochs, eval per epoch). For the upstream-scale 270k
-dataset, raise the batch size and drop epochs back to upstream defaults.
+Hyperparameters in `02_a_train_baseline.ipynb` are tuned for ~1k-sample
+exports (batch 16, 8 epochs, eval per epoch). For the upstream-scale
+270k dataset, raise the batch size and drop epochs back to upstream
+defaults.
 
-`03_eval.ipynb` writes ONNX artifacts into
-`../../checkpoints/smart-turn-zh/onnx/`; the INT8 file is what plugs
+`04_export.ipynb` writes ONNX artifacts into
+`../../checkpoints/<dataset>/<run>/onnx/`; the INT8 file is what plugs
 into pipecat's `SmartTurnAnalyzer` for on-device end-of-turn detection.
 
 ## Experiments
@@ -80,9 +95,10 @@ Tracking what we've tried on the `smart-turn-zh` snapshot
 a single-sample flip ≈ 1.7pt F1, so deltas under ~3pt are within noise.
 
 **Val F1** = best threshold-swept F1 on `ds["validation"]` (used to
-pick the epoch). **Test F1** = held-out F1 from `03_eval.ipynb` on
+pick the epoch). **Test F1** = held-out F1 from `03_compare.ipynb` on
 `ds["test"]` at the same shipped threshold — that's what actually
-ships. Always paste both.
+ships. INT8 column comes from `04_export.ipynb` (only the winner gets
+exported). Always paste both.
 
 | # | RUN_NAME | Notebook | Threshold | Val F1 | Val P / R | Test F1 (FP32 / INT8) | Notes |
 |---|---|---|---|---|---|---|---|
@@ -93,9 +109,10 @@ ships. Always paste both.
 
 What's been won so far independent of val noise:
 
-- **Calibrated operating threshold** — `02_train.ipynb` writes
-  `threshold.json` next to the checkpoint; `03_eval.ipynb` loads it for
-  both PyTorch and INT8 metrics. +3.6pt F1 over `> 0.5` on the same
+- **Calibrated operating threshold** — every `02_<letter>_*` writes
+  `threshold.json` next to the checkpoint; `03_compare` and `04_export`
+  load it so PyTorch / FP32 ONNX / INT8 ONNX metrics all use the same
+  shipped operating point. +3.6pt F1 over `> 0.5` on the same
   probabilities, so this is a free win at inference time.
 - **Stable pos_weight** — pinned once from the full train label
   distribution. Avoids the pathological case where a small batch with

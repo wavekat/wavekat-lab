@@ -277,3 +277,62 @@ def evaluate_and_save_threshold(trainer, eval_dataset, checkpoint_dir: Path) -> 
     print(f"vs 0.5 default :              val F1 = {default_f1:.4f}  "
           f"(Δ {best_f1 - default_f1:+.4f})")
     return payload
+
+
+# -----------------------------------------------------------------------------
+# Cross-run comparison
+# -----------------------------------------------------------------------------
+
+
+def score_run(
+    checkpoint_dir: Path,
+    hf_test_split,
+    target_sr: int,
+    chunk_length: int,
+    device: torch.device,
+    batch_size: int = 16,
+) -> dict:
+    """Load checkpoint + its `threshold.json` and score it on `hf_test_split`.
+
+    Returns dict with: threshold, probs, labels, accuracy, precision,
+    recall, f1, average_precision. Used by `04_compare.ipynb` to lay
+    runs side by side without re-implementing inference per notebook.
+    """
+    from torch.utils.data import DataLoader
+    from transformers import WhisperFeatureExtractor
+
+    checkpoint_dir = Path(checkpoint_dir)
+    fe = WhisperFeatureExtractor.from_pretrained(checkpoint_dir)
+    model = SmartTurnModel.from_pretrained(checkpoint_dir).to(device).eval()
+
+    threshold_path = checkpoint_dir / "threshold.json"
+    threshold = (
+        float(json.loads(threshold_path.read_text())["threshold"])
+        if threshold_path.exists() else 0.5
+    )
+
+    dataset = SmartTurnDataset(
+        hf_test_split, fe, target_sr, chunk_length, augment=None,
+    )
+    loader = DataLoader(dataset, batch_size=batch_size, num_workers=0)
+    probs_chunks, labels_chunks = [], []
+    with torch.no_grad():
+        for batch in loader:
+            feats = batch["input_features"].to(device)
+            out = model(feats)
+            probs_chunks.append(out["logits"].detach().cpu().numpy())
+            labels_chunks.append(batch["labels"].numpy())
+    probs = np.concatenate(probs_chunks)
+    labels = np.concatenate(labels_chunks).astype(int)
+    preds = (probs > threshold).astype(int)
+
+    return {
+        "threshold": threshold,
+        "probs": probs,
+        "labels": labels,
+        "accuracy": float(accuracy_score(labels, preds)),
+        "precision": float(precision_score(labels, preds, zero_division=0)),
+        "recall": float(recall_score(labels, preds, zero_division=0)),
+        "f1": float(f1_score(labels, preds, zero_division=0)),
+        "average_precision": float(average_precision_score(labels, probs)),
+    }
