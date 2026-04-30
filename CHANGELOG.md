@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.0.11](https://github.com/wavekat/wavekat-lab/compare/v0.0.10...v0.0.11) (2026-04-30)
+
+
+### Features
+
+* add smart-turn load notebook ([#28](https://github.com/wavekat/wavekat-lab/issues/28)) ([a64f70a](https://github.com/wavekat/wavekat-lab/commit/a64f70ac1526798288023cdaa038a6df7b95403f))
+* smart-turn ZH train + eval pipeline ([#30](https://github.com/wavekat/wavekat-lab/issues/30)) ([23b58ec](https://github.com/wavekat/wavekat-lab/commit/23b58ec4c61ad916f01bfc7a399b98d631295cd5))
+
 ## [0.0.10](https://github.com/wavekat/wavekat-lab/compare/v0.0.9...v0.0.10) (2026-04-04)
 
 
