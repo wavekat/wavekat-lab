@@ -24,6 +24,7 @@ dependencies = [
 # (or `pip install -e ".[smart-turn]"`)
 smart-turn = [
     "torch>=2.4",
+    "torchaudio>=2.4",
     "transformers>=4.45",
     "accelerate>=1.1",
     "onnx>=1.17",
