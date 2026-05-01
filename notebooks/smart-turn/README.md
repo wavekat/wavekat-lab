@@ -94,9 +94,26 @@ into pipecat's `SmartTurnAnalyzer` for on-device end-of-turn detection.
 
 ## Experiments
 
-Tracking what we've tried on the `smart-turn-zh` snapshot
-(1062 train / 59 val / 59 test). Caveat: with a 59-sample val/test set
-a single-sample flip ≈ 1.7pt F1, so deltas under ~3pt are within noise.
+Tracking what we've tried across snapshots. Each `smart-turn-zh-*`
+dataset is a separate `wk exports adapt smart-turn` snapshot under
+`datasets/`; the suffix is the date the export was cut.
+
+| Snapshot | Train | Val | Test | Total | Source |
+|---|---|---|---|---|---|
+| `smart-turn-zh` (legacy) | 1062 | 59 | 59 | 1180 | initial wavekat human labels |
+| `smart-turn-zh-0501` | 1256 | 155 | 158 | 1569 | wavekat human labels |
+| `smart-turn-zh-0502` | 1470 | 185 | 181 | 1836 | 0501 + RAMC uncertainty-mined clips, hand-confirmed |
+
+**Important caveat for cross-snapshot comparisons:** the test split is
+re-drawn each export, so AP/F1 numbers on different snapshots are not
+apples-to-apples. The 0502 test set in particular is harder than
+0501's — pipecat-v3 (a frozen baseline) lost 3pt AP between them. See
+[`docs/04-0501-0502-models.md`](docs/04-0501-0502-models.md) for the
+full discussion and the plan to freeze a single test set going
+forward.
+
+Caveat for the original 59-sample val/test set: a single-sample flip
+≈ 1.7pt F1, so deltas under ~3pt are within noise.
 
 **Val F1** = best threshold-swept F1 on `ds["validation"]` (used to
 pick the epoch). **Test F1** = held-out F1 from `03_compare.ipynb` on
@@ -110,6 +127,10 @@ exported). Always paste both.
 | 2 | _legacy_ | pre-refactor `02_train.ipynb`, + threshold sweep + pinned pos_weight | 0.41 (swept) | 0.7826 (ep 5) | 0.711 / 0.871 | _not recorded_ | PR-curve AP=0.768. F1 vs run 1 is within val noise; the win is the calibrated operating point. |
 | 3 | `baseline` | `02_a_train_baseline.ipynb` | 0.38 (swept) | _see compare_ | — | 0.643 / _not exported_ | Refactored thin notebook, conceptually equivalent to run 2. Test AP=0.702. |
 | 4 | `specaugment` | `02_b_train_specaugment.ipynb` | 0.44 (swept) | _see compare_ | — | **0.691** / _tbd_ | + SpecAugment time 2×40, freq 2×15. Test AP=0.722. **Winner** — beats baseline on F1 (+4.8pt), precision, recall, AP. Export this. |
+| 5 | `0501/baseline` | `02_a_train_baseline.ipynb` on `smart-turn-zh-0501` | 0.09 (swept) | 0.909 | — | _tbd_ | Test AP=0.959. First run on the larger 0501 snapshot. |
+| 6 | `0501/specaugment` | `02_b_train_specaugment.ipynb` on `smart-turn-zh-0501` | 0.71 (swept) | 0.912 | — | _tbd_ | Test AP=**0.990**. Best AP we've recorded — but on the 0501 test split only. |
+| 7 | `0502/baseline` | `02_a_train_baseline.ipynb` on `smart-turn-zh-0502` | 0.60 (swept) | 0.929 | — | _tbd_ | Test AP=0.935 on 0502 test split. |
+| 8 | `0502/specaugment` | `02_b_train_specaugment.ipynb` on `smart-turn-zh-0502` | 0.21 (swept) | 0.910 | — | _tbd_ | Test AP=0.909 on 0502 test split. **AP looks lower than #6 but the test set is harder** — pipecat-v3 also lost 3pt on the same split (see `docs/04-0501-0502-models.md`). |
 
 What's been won so far independent of val noise:
 

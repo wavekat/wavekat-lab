@@ -182,4 +182,20 @@ Tier 3 is the only source allowed to grow test.
 
 ## Results
 
-_Fill in as the phase runs._
+- **2026-05-01 — `smart-turn-zh-0501`:** first wavekat-platform-only
+  human-labeled snapshot. 1256 train / 155 val / 158 test (1569
+  total). Trained `baseline` and `specaugment` variants under
+  `checkpoints/smart-turn-zh-0501/`. Test AP: baseline 0.959,
+  specaugment 0.990, pipecat-v3 zero-shot 0.961.
+- **2026-05-02 — `smart-turn-zh-0502`:** 0501 + ~267 RAMC
+  uncertainty-mined clips (uploaded as `pre_labeled` via
+  `notebooks/smart-turn-mining/06_b_upload_uncertainty_to_platform.ipynb`,
+  hand-confirmed on the platform, re-exported). 1470 / 185 / 181
+  (1836 total). Test AP: baseline 0.935, specaugment 0.909,
+  pipecat-v3 zero-shot 0.931 — AP **dropped on every model including
+  the frozen pipecat-v3**, which means the 0502 test split is harder
+  than 0501's (the export pipeline routed ~10% of the new
+  near-threshold uncertainties into test). Full writeup, including the
+  cross-eval needed to disentangle test-shift from model-shift and the
+  next-cycle plan (freeze a real-distribution test set, broaden mining
+  beyond uncertainty), in [`04-0501-0502-models.md`](04-0501-0502-models.md).
