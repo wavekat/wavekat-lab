@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.0.12](https://github.com/wavekat/wavekat-lab/compare/v0.0.11...v0.0.12) (2026-05-04)
+
+
+### Features
+
+* **smart-turn:** mining uploads + zh-0503 bump ([def89be](https://github.com/wavekat/wavekat-lab/commit/def89beeb09df5377f44a54669181fb527e1ad59))
+* **smart-turn:** RAMC mining + 0501/0502 models ([#33](https://github.com/wavekat/wavekat-lab/issues/33)) ([8d22bdf](https://github.com/wavekat/wavekat-lab/commit/8d22bdf08d7411c4df045307d1f2ee22249ccd23))
+
 ## [0.0.11](https://github.com/wavekat/wavekat-lab/compare/v0.0.10...v0.0.11) (2026-04-30)
 
 
