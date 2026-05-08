@@ -54,6 +54,17 @@ $ wk-st run --dataset datasets/smart-turn-zh-0503 --recipe specaugment
 
 …with no notebook in the loop.
 
+Or, starting one step earlier — straight from a wavekat-platform export
+ID, no manual `wk exports …`:
+
+```
+$ wk-st run --export-id 7c1e… --recipe specaugment
+… downloading export 7c1e… (1842 clips) …
+… adapting → datasets/smart-turn-zh-0504/ …
+… 12 minutes later …
+✅ run smart-turn-zh-0504/specaugment   …
+```
+
 Notebooks stay as **tutorial / exploration** surfaces — they're how a
 new team member learns the model — but they stop being the way we
 ship. The wheel is the way we ship.
@@ -73,6 +84,8 @@ In:
   drifting from reality.
 - W&B integration, gated behind `WANDB_API_KEY`. Off ⇒ everything
   still works, just no cloud dashboard.
+- **Pulling a wavekat-platform export by ID** (download + adapt) so the
+  user never runs `wk exports …` by hand. See "Export-ID ingest" below.
 
 Out (deliberately):
 
@@ -80,10 +93,72 @@ Out (deliberately):
   are a thin loop on top, not a feature of the wheel.
 - Distributed / multi-GPU training. T4-on-Azure single-GPU is the
   reference target.
-- Replacing the wavekat-platform export step. The wheel starts at
-  `adapt smart-turn`'s output, not before.
+- Creating the export itself (`wk exports create`). That step needs
+  project-id + label-keys + split params and is rare enough to stay a
+  human-issued command. The wheel picks up from a created export's ID.
 - Auto-promoting a checkpoint to "shipped". Picking a winner is still
   a human decision per `MISSION.md`.
+
+## Export-ID ingest
+
+The README's "Producing the input" section is three commands the user
+runs by hand:
+
+```
+wk exports create <project-id> --name "smart-turn-zh $(date +%Y-%m-%d)" …
+wk exports download <export-id> --out ./snapshots/smart-turn-zh
+wk exports adapt smart-turn --export-dir ./snapshots/smart-turn-zh \
+    --out ./datasets/smart-turn-zh --language zh
+```
+
+Step 1 (`create`) stays manual — it's the slow, opinion-laden part.
+
+Steps 2 + 3 (`download` + `adapt`) are mechanical and the wheel does
+them. `wk-st run` accepts either a local dataset directory **or** an
+export ID:
+
+```
+wk-st run --export-id 7c1e2f… --recipe specaugment
+                       │
+                       └─ resolves to:
+                          1. wk exports download <id>
+                               --out  snapshots/<derived-name>/
+                          2. wk exports adapt smart-turn
+                               --export-dir snapshots/<derived-name>/
+                               --out        datasets/<derived-name>/
+                               --language   zh
+                          3. then run --dataset datasets/<derived-name>/ …
+```
+
+Behaviour rules:
+
+- **Derived name.** `<derived-name>` defaults to the export's `name`
+  field (slugified) — e.g. `smart-turn-zh-2026-05-08` — so the
+  directory is human-readable and matches `wk` conventions.
+  `--dataset-name <slug>` overrides it (use this for the
+  `smart-turn-zh-0504` style we've been using).
+- **Idempotent.** If `datasets/<derived-name>/` already exists and its
+  recorded export-id matches, skip download + adapt. Re-run cheap.
+- **Provenance.** `results.json` (and the ledger row) record both the
+  local dataset path **and** the originating export ID, so you can
+  always trace a checkpoint back to a platform export.
+- **Auth.** Uses whatever `wk` is already configured with. The wheel
+  calls `wk` as a subprocess; no separate API client. If `wk` isn't on
+  PATH or isn't authed, it fails loudly before any training starts.
+- **Two ingest knobs only:** `--export-id` and `--dataset-name`. We
+  deliberately do **not** expose `--language`, `--review-status`, or
+  `--ratios` here — those are export-creation params and belong in
+  `wk exports create`, not in the wheel. (If we ever want them, add a
+  `wk-st create-export` thin wrapper later.)
+
+Concretely, this lives in `wkst/ingest.py` and is called once at the
+start of `wk-st run` if `--export-id` was passed, before
+`wkst.run.train(...)` ever sees the dataset path.
+
+The frozen test set (Gap 1 of doc 04) is the same shape: pass
+`--test-export-id <id>` and the wheel downloads + adapts + uses it as
+the test source. Or pass `--test datasets/smart-turn-zh-test-frozen`
+if it's already on disk.
 
 ## Architecture
 
@@ -95,6 +170,7 @@ Out (deliberately):
 │     config.py          # Recipe + RunConfig dataclasses             │
 │     recipes/           # baseline.py, specaugment.py, … one per     │
 │                        # 02_<letter> notebook today                 │
+│     ingest.py          # --export-id → wk download + adapt → dataset│
 │     run.py             # load → train → eval → write results.json   │
 │     compare.py         # NxM grid, cross-snapshot scoring           │
 │     report.py          # rebuild README scorecard from ledger       │
@@ -156,6 +232,7 @@ onnx/                           # only if --export passed
   "dataset": {
     "path": "datasets/smart-turn-zh-0503",
     "sha256": "…",                  // hash of metadata.json + parquets
+    "export_id": "7c1e2f…",          // wavekat-platform export id, if known
     "n_train": 1820, "n_val": 228, "n_test": 224
   },
   "recipe": { "name": "specaugment", "epochs": 8, "...": "..." },
@@ -276,20 +353,26 @@ Alternatives considered:
 Each phase is shippable on its own. Stop after any phase if the next
 one isn't paying off.
 
-### Phase 1 — extract recipes, add `wk-st run`
+### Phase 1 — extract recipes, add `wk-st run` (with export-ID ingest)
 
-Goal: replace the `02_<letter>_*` Run-All step.
+Goal: replace the `02_<letter>_*` Run-All step **and** the
+`wk download` + `wk adapt` hand-typed commands in front of it.
 
 - New `tools/smart-turn-pipeline/` package, deps inherited from the
   `smart-turn` extras group.
 - Move `01 + 02_<letter>` cell logic into `wkst.run` (loader,
   trainer, threshold sweep, save). Notebooks stay; they just import
   from `wkst` and become 3-cell wrappers.
+- `wkst.ingest` resolves `--export-id` → `wk exports download` +
+  `wk exports adapt smart-turn` → dataset directory. Idempotent;
+  records the export-id in `results.json`.
 - Write `results.json` and append to ledger.
 - No W&B yet, no cross-eval yet.
 
-Exit: `wk-st run --dataset … --recipe specaugment` produces the same
-checkpoint + threshold.json as today, plus `results.json`.
+Exit: `wk-st run --export-id <id> --recipe specaugment` produces the
+same checkpoint + `threshold.json` as today's manual flow, plus
+`results.json` carrying the export-id provenance. `--dataset <path>`
+still works for already-adapted snapshots.
 
 ### Phase 2 — `wk-st compare` and frozen test set
 
