@@ -20,6 +20,9 @@ train = [
     "torchaudio>=2.4",
     "transformers>=4.45",
     "accelerate>=1.1",
+    # `wk-st export` — ONNX FP32 + INT8 quantize + bench
+    "onnx>=1.17",
+    "onnxruntime>=1.20",
 ]
 dev = [
     "pytest>=8.0",

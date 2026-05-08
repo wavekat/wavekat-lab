@@ -114,3 +114,41 @@ def test_compare_rejects_unknown_metric():
         parser.parse_args([
             "compare", "--runs", "/tmp/a", "--metric", "made-up",
         ])
+
+
+def test_export_requires_checkpoint_and_dataset():
+    parser = _parser()
+    with pytest.raises(SystemExit):
+        parser.parse_args(["export"])
+    with pytest.raises(SystemExit):
+        parser.parse_args(["export", "--checkpoint", "/tmp/c"])
+    with pytest.raises(SystemExit):
+        parser.parse_args(["export", "--dataset", "/tmp/d"])
+
+
+def test_export_accepts_full_args():
+    parser = _parser()
+    ns = parser.parse_args([
+        "export",
+        "--checkpoint", "/tmp/c",
+        "--dataset", "/tmp/d",
+        "--test", "/tmp/frozen",
+        "--calibration-samples", "128",
+        "--bench-runs", "50",
+    ])
+    assert str(ns.checkpoint) == "/tmp/c"
+    assert ns.calibration_samples == 128
+    assert ns.bench_runs == 50
+
+
+def test_report_print_only_flag():
+    parser = _parser()
+    ns = parser.parse_args(["report", "--print"])
+    assert ns.print_only is True
+    assert ns.readme is None
+
+
+def test_report_accepts_readme_override():
+    parser = _parser()
+    ns = parser.parse_args(["report", "--readme", "/tmp/X.md"])
+    assert str(ns.readme) == "/tmp/X.md"

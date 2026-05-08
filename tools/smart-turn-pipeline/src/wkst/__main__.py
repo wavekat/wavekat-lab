@@ -1,7 +1,4 @@
-"""``wk-st`` CLI — phases 1 + 2: ``run`` and ``compare``.
-
-Phase 3 will add ``export`` + ``report``.
-"""
+"""``wk-st`` CLI — ``run``, ``compare``, ``export``, ``report``."""
 
 from __future__ import annotations
 
@@ -147,6 +144,75 @@ def _parser() -> argparse.ArgumentParser:
         help="Bootstrap resamples for F1 CIs in cross-eval mode.",
     )
 
+    # ── export ─────────────────────────────────────────────────────────────
+    exp = sub.add_parser(
+        "export",
+        help=(
+            "ONNX FP32 + INT8 quantize + drift + bench on a chosen "
+            "checkpoint. Patches the run's results.json with an "
+            "`export` block."
+        ),
+    )
+    exp.add_argument(
+        "--checkpoint",
+        type=Path,
+        required=True,
+        help="Checkpoint directory produced by `wk-st run`.",
+    )
+    exp.add_argument(
+        "--dataset",
+        type=Path,
+        required=True,
+        help=(
+            "Dataset directory with train.parquet (used as INT8 "
+            "calibration source) and, by default, the test set."
+        ),
+    )
+    exp.add_argument(
+        "--test",
+        type=Path,
+        help=(
+            "Override the test set (must contain test.parquet). "
+            "Useful for the frozen-test workflow."
+        ),
+    )
+    exp.add_argument(
+        "--calibration-samples",
+        type=int,
+        default=256,
+        help="How many train clips to feed the entropy calibrator.",
+    )
+    exp.add_argument(
+        "--bench-runs",
+        type=int,
+        default=100,
+        help="ONNX latency-bench iterations after warmup.",
+    )
+
+    # ── report ─────────────────────────────────────────────────────────────
+    rep = sub.add_parser(
+        "report",
+        help=(
+            "Rebuild the README scorecard from checkpoints/_ledger.jsonl. "
+            "Markers `<!-- wk-st:scorecard:start -->` / "
+            "`<!-- wk-st:scorecard:end -->` must surround the table."
+        ),
+    )
+    rep.add_argument(
+        "--readme",
+        type=Path,
+        help=(
+            "Path to the README to patch. Defaults to "
+            "notebooks/smart-turn/README.md."
+        ),
+    )
+    rep.add_argument(
+        "--print",
+        dest="print_only",
+        action="store_true",
+        help="Print the table to stdout without touching the README.",
+    )
+
     return p
 
 
@@ -215,6 +281,40 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "compare":
         return _compare(args)
+
+    if args.command == "export":
+        from wkst.export import export_run
+
+        result = export_run(
+            checkpoint_dir=args.checkpoint,
+            dataset_dir=args.dataset,
+            test_dir=args.test,
+            calibration_samples=args.calibration_samples,
+            bench_runs=args.bench_runs,
+        )
+        print(f"FP32 ONNX : {result.fp32_onnx}")
+        print(f"INT8 ONNX : {result.int8_onnx}")
+        b = result.block
+        print(
+            f"INT8 test : F1 {b['int8']['metrics']['f1']:.3f}  "
+            f"(Δ {b['drift']['f1']:+.3f} vs FP32)"
+        )
+        print(
+            f"INT8 lat  : p50 {b['int8']['bench']['p50_ms']:.1f} ms  "
+            f"p95 {b['int8']['bench']['p95_ms']:.1f} ms"
+        )
+        return 0
+
+    if args.command == "report":
+        from wkst import report
+
+        if args.print_only:
+            rows = report.collect_rows()
+            print(report.render_scorecard(rows))
+            return 0
+        updated = report.rebuild_readme(args.readme)
+        print("README updated" if updated else "README unchanged")
+        return 0
 
     raise SystemExit(f"unknown command: {args.command}")
 

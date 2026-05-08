@@ -23,7 +23,7 @@ from datetime import datetime, timezone
 from functools import partial
 from pathlib import Path
 
-from wkst import ledger
+from wkst import ledger, tracking
 from wkst._smart_turn import load_smart_turn
 from wkst.config import RunConfig
 from wkst.metrics import bootstrap_f1_ci, continuation_recall
@@ -207,6 +207,27 @@ def run(cfg: RunConfig) -> Path:
         run=f"{cfg.dataset_name}/{cfg.run_name}",
         results_path=results_path,
     )
+
+    # ---- 9. W&B test-time logging (no-op if WANDB_API_KEY is unset).
+    # HF Trainer started the run already; we attach + push the
+    # post-train block it never saw.
+    wandb_run = tracking.init_run(
+        project="smart-turn",
+        run_name=f"{cfg.dataset_name}-{cfg.run_name}",
+        config={"recipe": cfg.recipe.as_dict(),
+                "dataset": cfg.dataset_name,
+                "run_name": cfg.run_name,
+                "export_id": cfg.export_id},
+        tags=[cfg.recipe.name, cfg.dataset_name],
+    )
+    if wandb_run is not None:
+        if test_metrics is not None:
+            tracking.log_test_metrics(wandb_run, test_metrics)
+        tracking.log_test_metrics(
+            wandb_run, {"val_threshold": threshold_payload.get("threshold")},
+        )
+    tracking.finish(wandb_run)
+
     return results_path
 
 

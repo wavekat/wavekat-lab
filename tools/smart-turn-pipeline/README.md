@@ -9,23 +9,30 @@ Design doc:
 
 ## Status
 
-Phases 1 + 2 landed:
+Phases 1, 2, and 3 landed — the wheel is feature-complete per the
+design doc:
 
 - `wk-st run` — ingest a wavekat-platform export id (or use a local
   adapted dataset) and train one recipe end-to-end, producing the
   same checkpoint + `threshold.json` the notebooks produce, plus a
-  structured `results.json` and a ledger entry. Test metrics now
-  include **bootstrap 95% F1 CI** and **continuation-class recall**
-  (the actual `MISSION.md` ship metrics).
+  structured `results.json` and a ledger entry. Test metrics include
+  **bootstrap 95% F1 CI** and **continuation-class recall** (the
+  actual `MISSION.md` ship metrics). W&B test-time logging if
+  `WANDB_API_KEY` is set.
 - `wk-st compare` — read mode (just prints metrics from each run's
   `results.json`) and cross-eval mode (`--tests`: score every run on
   every dataset, the NxM grid that doc 04 said was the blocker for
   resolving the 0501 → 0502 AP regression). `--pipecat-onnx`
   optionally adds the pipecat-v3 frozen-baseline column.
-
-Phase 3 will add `wk-st export` (ONNX FP32 + INT8 + bench) +
-`wk-st report` (rebuild README scorecard from the ledger) + W&B
-test-time `log_metrics`.
+- `wk-st export` — FP32 ONNX export, INT8 static quantization (QDQ +
+  entropy calibration), FP32-vs-INT8 drift on the test set, and CPU
+  latency benchmark (p50/p95/p99). Patches the run's `results.json`
+  with an `export` block.
+- `wk-st report` — regenerates the README scorecard from the ledger.
+  Looks for `<!-- wk-st:scorecard:start -->` /
+  `<!-- wk-st:scorecard:end -->` markers and rewrites just the
+  region between them, leaving the historical / hand-curated section
+  alone.
 
 ## Install
 
@@ -82,6 +89,39 @@ wk-st compare \
   --out    reports/0503-cross-eval.md
 ```
 
+### `wk-st export`
+
+```sh
+wk-st export \
+  --checkpoint checkpoints/smart-turn-zh-0503/specaugment \
+  --dataset    datasets/smart-turn-zh-0503
+```
+
+Produces `checkpoint_dir/onnx/smart-turn.onnx` (FP32) and
+`smart-turn-int8.onnx` (INT8 QDQ), scores both on the test set at
+the run's saved threshold, runs a CPU latency bench, and merges an
+`export` block into `results.json`.
+
+### `wk-st report`
+
+```sh
+# rewrite notebooks/smart-turn/README.md between the markers
+wk-st report
+
+# preview without writing
+wk-st report --print
+```
+
+Markers in the README:
+
+```markdown
+<!-- wk-st:scorecard:start -->
+<!-- wk-st:scorecard:end -->
+```
+
+If the markers are missing, `wk-st report` prints a hint and exits
+without touching the file.
+
 Outputs land in `checkpoints/<dataset-name>/<run-name>/`:
 
 ```
@@ -116,6 +156,9 @@ src/wkst/
   run.py                # load → train → eval → results.json
   metrics.py            # bootstrap F1 CI, continuation-class recall
   compare.py            # read mode + NxM cross-eval grid
+  export.py             # FP32 + INT8 ONNX, drift, CPU latency bench
+  report.py             # ledger → README scorecard regeneration
+  tracking.py           # optional W&B integration (off by default)
   ledger.py             # checkpoints/_ledger.jsonl reader/writer
   _paths.py             # repo-root / datasets / checkpoints resolution
   _smart_turn.py        # sys.path shim for notebooks/smart-turn/smart_turn.py
