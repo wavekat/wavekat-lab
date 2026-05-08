@@ -9,14 +9,23 @@ Design doc:
 
 ## Status
 
-Phase 1 (this commit): `wk-st run` — ingest a wavekat-platform export
-id (or use a local adapted dataset) and train one recipe end-to-end,
-producing the same checkpoint + `threshold.json` the notebooks
-produce, plus a structured `results.json` and a ledger entry.
+Phases 1 + 2 landed:
 
-Phase 2 will add `wk-st compare`. Phase 3 adds `wk-st export` +
-`wk-st report` + W&B logging. See the design doc for what each phase
-is on the hook for.
+- `wk-st run` — ingest a wavekat-platform export id (or use a local
+  adapted dataset) and train one recipe end-to-end, producing the
+  same checkpoint + `threshold.json` the notebooks produce, plus a
+  structured `results.json` and a ledger entry. Test metrics now
+  include **bootstrap 95% F1 CI** and **continuation-class recall**
+  (the actual `MISSION.md` ship metrics).
+- `wk-st compare` — read mode (just prints metrics from each run's
+  `results.json`) and cross-eval mode (`--tests`: score every run on
+  every dataset, the NxM grid that doc 04 said was the blocker for
+  resolving the 0501 → 0502 AP regression). `--pipecat-onnx`
+  optionally adds the pipecat-v3 frozen-baseline column.
+
+Phase 3 will add `wk-st export` (ONNX FP32 + INT8 + bench) +
+`wk-st report` (rebuild README scorecard from the ledger) + W&B
+test-time `log_metrics`.
 
 ## Install
 
@@ -32,6 +41,8 @@ and the package installs deps-free.
 
 ## Usage
 
+### `wk-st run`
+
 ```sh
 # from a wavekat-platform export id — the wheel does download + adapt
 wk-st run --export-id 7c1e2f3a --recipe specaugment
@@ -46,6 +57,29 @@ wk-st run --export-id 7c1e2f3a --recipe specaugment \
 # warm-start from a previous checkpoint
 wk-st run --dataset datasets/smart-turn-zh-0503 --recipe specaugment \
           --warm-start-from checkpoints/smart-turn-zh-0502/specaugment
+```
+
+### `wk-st compare`
+
+```sh
+# read mode — just print recorded test metrics, no torch needed
+wk-st compare --runs \
+  checkpoints/smart-turn-zh-0501/specaugment \
+  checkpoints/smart-turn-zh-0502/specaugment \
+  checkpoints/smart-turn-zh-0503/specaugment
+
+# cross-eval — every run × every test set; resolves the 0501→0502
+# regression by scoring each ckpt on every test split.
+wk-st compare \
+  --runs   checkpoints/smart-turn-zh-0501/specaugment \
+           checkpoints/smart-turn-zh-0502/specaugment \
+           checkpoints/smart-turn-zh-0503/specaugment \
+  --tests  datasets/smart-turn-zh-0501 \
+           datasets/smart-turn-zh-0502 \
+           datasets/smart-turn-zh-test-frozen \
+  --pipecat-onnx checkpoints/pipecat/smart-turn-v3.onnx \
+  --metric f1 \
+  --out    reports/0503-cross-eval.md
 ```
 
 Outputs land in `checkpoints/<dataset-name>/<run-name>/`:
@@ -80,6 +114,8 @@ src/wkst/
   recipes/              # baseline.py, specaugment.py — registry
   ingest.py             # --export-id → wk download + adapt → dataset dir
   run.py                # load → train → eval → results.json
+  metrics.py            # bootstrap F1 CI, continuation-class recall
+  compare.py            # read mode + NxM cross-eval grid
   ledger.py             # checkpoints/_ledger.jsonl reader/writer
   _paths.py             # repo-root / datasets / checkpoints resolution
   _smart_turn.py        # sys.path shim for notebooks/smart-turn/smart_turn.py

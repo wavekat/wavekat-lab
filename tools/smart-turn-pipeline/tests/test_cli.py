@@ -76,3 +76,41 @@ def test_run_rejects_both_test_flags():
             "--test", "/tmp/x",
             "--test-export-id", "y",
         ])
+
+
+def test_compare_requires_runs():
+    parser = _parser()
+    with pytest.raises(SystemExit):
+        parser.parse_args(["compare"])
+
+
+def test_compare_accepts_multiple_runs():
+    parser = _parser()
+    ns = parser.parse_args([
+        "compare", "--runs", "/tmp/a", "/tmp/b", "/tmp/c",
+    ])
+    assert [str(p) for p in ns.runs] == ["/tmp/a", "/tmp/b", "/tmp/c"]
+    assert ns.tests is None
+    assert ns.metric == "f1"
+
+
+def test_compare_with_tests_switches_metric():
+    parser = _parser()
+    ns = parser.parse_args([
+        "compare",
+        "--runs", "/tmp/a",
+        "--tests", "/tmp/t1", "/tmp/t2",
+        "--metric", "ap",
+        "--bootstrap-n", "200",
+    ])
+    assert [str(p) for p in ns.tests] == ["/tmp/t1", "/tmp/t2"]
+    assert ns.metric == "ap"
+    assert ns.bootstrap_n == 200
+
+
+def test_compare_rejects_unknown_metric():
+    parser = _parser()
+    with pytest.raises(SystemExit):
+        parser.parse_args([
+            "compare", "--runs", "/tmp/a", "--metric", "made-up",
+        ])

@@ -23,6 +23,10 @@ train = [
 ]
 dev = [
     "pytest>=8.0",
+    # bootstrap CIs and continuation-recall live in wkst.metrics —
+    # tests need numpy + sklearn but not torch.
+    "numpy>=2.0",
+    "scikit-learn>=1.5",
 ]
 
 [project.scripts]

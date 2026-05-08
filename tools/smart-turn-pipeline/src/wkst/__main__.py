@@ -1,6 +1,6 @@
-"""``wk-st`` CLI — phase 1: ``run`` only.
+"""``wk-st`` CLI — phases 1 + 2: ``run`` and ``compare``.
 
-Phase 2 will add ``compare``, phase 3 ``export`` + ``report``.
+Phase 3 will add ``export`` + ``report``.
 """
 
 from __future__ import annotations
@@ -92,6 +92,61 @@ def _parser() -> argparse.ArgumentParser:
         ),
     )
 
+    # ── compare ────────────────────────────────────────────────────────────
+    cmp_ = sub.add_parser(
+        "compare",
+        help=(
+            "Read mode: print metrics from each run's results.json. "
+            "Cross-eval mode: also score every run on every --tests "
+            "dataset (needs torch + the checkpoints on disk)."
+        ),
+    )
+    cmp_.add_argument(
+        "--runs",
+        nargs="+",
+        required=True,
+        type=Path,
+        help="Checkpoint directories (each must have results.json).",
+    )
+    cmp_.add_argument(
+        "--tests",
+        nargs="*",
+        type=Path,
+        help=(
+            "If set, switch to cross-eval mode: score every run on "
+            "every dataset directory listed here. Each must contain a "
+            "test.parquet."
+        ),
+    )
+    cmp_.add_argument(
+        "--pipecat-onnx",
+        type=Path,
+        help=(
+            "Optional pipecat-ai/smart-turn-v3 ONNX path; adds it as a "
+            "frozen baseline column in cross-eval mode."
+        ),
+    )
+    cmp_.add_argument(
+        "--out",
+        type=Path,
+        help=(
+            "Write the markdown table to this file (and a .json sibling). "
+            "Without --out, prints to stdout."
+        ),
+    )
+    cmp_.add_argument(
+        "--metric",
+        default="f1",
+        choices=["f1", "ap", "continuation_recall", "precision", "recall"],
+        help="Which metric drives the cross-eval grid (default: f1).",
+    )
+    cmp_.add_argument(
+        "--bootstrap-n",
+        type=int,
+        default=1000,
+        help="Bootstrap resamples for F1 CIs in cross-eval mode.",
+    )
+
     return p
 
 
@@ -158,7 +213,52 @@ def main(argv: list[str] | None = None) -> int:
         print(f"results      : {results_path}")
         return 0
 
+    if args.command == "compare":
+        return _compare(args)
+
     raise SystemExit(f"unknown command: {args.command}")
+
+
+def _compare(args) -> int:
+    """Implement the ``compare`` subcommand. Read or cross-eval mode."""
+    from wkst import compare as cmp_
+
+    cards = cmp_.load_run_cards(args.runs)
+
+    if args.tests:
+        grid = cmp_.cross_eval(
+            checkpoint_dirs=[c.checkpoint_dir for c in cards],
+            test_dirs=args.tests,
+            pipecat_onnx=args.pipecat_onnx,
+            bootstrap_n=args.bootstrap_n,
+        )
+        table = cmp_.render_cross_eval_table(grid, metric=args.metric)
+        body = (
+            f"# wk-st compare — cross-eval ({args.metric})\n\n"
+            f"{table}\n\n"
+            f"_runs={len(grid['runs'])} tests={len(grid['tests'])} "
+            f"metric={args.metric}_\n"
+        )
+        if args.out:
+            args.out.parent.mkdir(parents=True, exist_ok=True)
+            args.out.write_text(body)
+            args.out.with_suffix(args.out.suffix + ".json").write_text(
+                __import__("json").dumps(grid, indent=2, ensure_ascii=False)
+            )
+            print(f"wrote {args.out}")
+        else:
+            print(body)
+        return 0
+
+    table = cmp_.render_read_table(cards)
+    body = f"# wk-st compare — read mode\n\n{table}\n"
+    if args.out:
+        args.out.parent.mkdir(parents=True, exist_ok=True)
+        args.out.write_text(body)
+        print(f"wrote {args.out}")
+    else:
+        print(body)
+    return 0
 
 
 if __name__ == "__main__":

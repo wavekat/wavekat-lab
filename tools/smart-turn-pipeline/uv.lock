@@ -2829,7 +2829,9 @@ source = { editable = "." }
 
 [package.optional-dependencies]
 dev = [
+    { name = "numpy" },
     { name = "pytest" },
+    { name = "scikit-learn" },
 ]
 train = [
     { name = "accelerate" },
@@ -2851,9 +2853,11 @@ requires-dist = [
     { name = "datasets", marker = "extra == 'train'", specifier = ">=3.0,<4.0" },
     { name = "librosa", marker = "extra == 'train'", specifier = ">=0.10" },
     { name = "matplotlib", marker = "extra == 'train'", specifier = ">=3.9" },
+    { name = "numpy", marker = "extra == 'dev'", specifier = ">=2.0" },
     { name = "numpy", marker = "extra == 'train'", specifier = ">=2.0" },
     { name = "pandas", marker = "extra == 'train'", specifier = ">=2.2" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },
+    { name = "scikit-learn", marker = "extra == 'dev'", specifier = ">=1.5" },
     { name = "scikit-learn", marker = "extra == 'train'", specifier = ">=1.5" },
     { name = "soundfile", marker = "extra == 'train'", specifier = ">=0.12" },
     { name = "torch", marker = "extra == 'train'", specifier = ">=2.4" },

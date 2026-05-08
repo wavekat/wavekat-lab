@@ -26,6 +26,7 @@ from pathlib import Path
 from wkst import ledger
 from wkst._smart_turn import load_smart_turn
 from wkst.config import RunConfig
+from wkst.metrics import bootstrap_f1_ci, continuation_recall
 
 
 def run(cfg: RunConfig) -> Path:
@@ -170,9 +171,18 @@ def run(cfg: RunConfig) -> Path:
             cfg.recipe.target_sr, cfg.recipe.chunk_length,
             device, batch_size=cfg.recipe.eval_batch_size,
         )
+        f1_ci = bootstrap_f1_ci(
+            scored["labels"], scored["probs"], float(scored["threshold"]),
+        )
+        cont_r = continuation_recall(
+            scored["labels"], scored["probs"], float(scored["threshold"]),
+        )
         test_metrics = {
             "threshold": float(scored["threshold"]),
             "f1": float(scored["f1"]),
+            "f1_ci95": [float(f1_ci.low), float(f1_ci.high)],
+            "f1_ci_n_resamples": f1_ci.n_resamples,
+            "continuation_recall": float(cont_r),
             "precision": float(scored["precision"]),
             "recall": float(scored["recall"]),
             "accuracy": float(scored["accuracy"]),
