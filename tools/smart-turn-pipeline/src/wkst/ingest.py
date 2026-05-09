@@ -65,20 +65,32 @@ def _check_wk_available() -> None:
         )
 
 
-def _run_wk(args: list[str]) -> str:
-    """Run ``wk`` with the given args; return stdout. Raises IngestError on non-zero."""
+def _run_wk(args: list[str], *, capture: bool = False) -> str:
+    """Run ``wk`` with the given args. Raises IngestError on non-zero.
+
+    With ``capture=True`` (default off) we collect stdout for the caller
+    — used for ``wk exports get --json`` where we need to parse the
+    payload. Otherwise stdout/stderr are inherited from the parent so
+    long-running steps like ``wk exports download`` / ``adapt`` show
+    their own progress bars in real time instead of blocking silently.
+    """
     cmd = [_wk_binary(), *args]
     try:
-        result = subprocess.run(
-            cmd, check=True, capture_output=True, text=True
-        )
+        if capture:
+            result = subprocess.run(
+                cmd, check=True, capture_output=True, text=True
+            )
+            return result.stdout
+        subprocess.run(cmd, check=True)
+        return ""
     except FileNotFoundError as exc:
         raise IngestError(f"`{cmd[0]}` not found on PATH") from exc
     except subprocess.CalledProcessError as exc:
+        stderr = getattr(exc, "stderr", None)
+        suffix = f":\n{stderr.strip()}" if stderr else ""
         raise IngestError(
-            f"`{' '.join(cmd)}` failed ({exc.returncode}):\n{exc.stderr.strip()}"
+            f"`{' '.join(cmd)}` failed ({exc.returncode}){suffix}"
         ) from exc
-    return result.stdout
 
 
 def _read_provenance(dataset_dir: Path) -> dict | None:
@@ -161,9 +173,14 @@ def resolve_dataset(
             )
 
     dest_snapshot.mkdir(parents=True, exist_ok=True)
+    print(f"→ wk exports download {export_id} → {dest_snapshot}", flush=True)
     _run_wk(["exports", "download", export_id, "--out", str(dest_snapshot)])
 
     dest_dataset.parent.mkdir(parents=True, exist_ok=True)
+    print(
+        f"→ wk exports adapt smart-turn (language={language}) → {dest_dataset}",
+        flush=True,
+    )
     _run_wk([
         "exports", "adapt", "smart-turn",
         "--export-dir", str(dest_snapshot),
@@ -195,7 +212,7 @@ def _derive_name_from_export(export_id: str) -> str:
     than failing the run — the dataset name is just a directory label.
     """
     try:
-        out = _run_wk(["exports", "get", export_id, "--json"])
+        out = _run_wk(["exports", "get", export_id, "--json"], capture=True)
     except IngestError:
         return f"export-{export_id[:8]}"
     try:

@@ -219,6 +219,11 @@ def _parser() -> argparse.ArgumentParser:
 def _resolve(args: argparse.Namespace) -> RunConfig:
     from wkst.ingest import resolve_dataset
 
+    if args.export_id is not None:
+        print(f"resolving    : export {args.export_id}", flush=True)
+    else:
+        print(f"resolving    : dataset {args.dataset}", flush=True)
+
     train_res = resolve_dataset(
         export_id=args.export_id,
         dataset_dir=args.dataset,
@@ -227,7 +232,8 @@ def _resolve(args: argparse.Namespace) -> RunConfig:
     )
     print(
         f"dataset      : {train_res.dataset_dir.name} "
-        f"({'cached' if train_res.cached else 'fresh'})"
+        f"({'cached' if train_res.cached else 'fresh'})",
+        flush=True,
     )
 
     test_dir = None
@@ -235,8 +241,9 @@ def _resolve(args: argparse.Namespace) -> RunConfig:
     if args.test is not None:
         test_res = resolve_dataset(dataset_dir=args.test)
         test_dir = test_res.dataset_dir
-        print(f"test (override): {test_dir.name}")
+        print(f"test (override): {test_dir.name}", flush=True)
     elif args.test_export_id is not None:
+        print(f"resolving    : test export {args.test_export_id}", flush=True)
         test_res = resolve_dataset(
             export_id=args.test_export_id,
             dataset_name=(args.dataset_name or "") + "-test"
@@ -245,7 +252,7 @@ def _resolve(args: argparse.Namespace) -> RunConfig:
         )
         test_dir = test_res.dataset_dir
         test_export_id = args.test_export_id
-        print(f"test (override): {test_dir.name}")
+        print(f"test (override): {test_dir.name}", flush=True)
 
     recipe = get_recipe(args.recipe)
     run_name = args.run_name or recipe.name

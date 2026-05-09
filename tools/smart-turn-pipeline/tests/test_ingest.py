@@ -72,7 +72,7 @@ def test_export_id_skipped_when_already_cached(fake_repo, monkeypatch):
 
     calls: list[list[str]] = []
 
-    def fake_run(args):
+    def fake_run(args, *, capture=False):
         calls.append(list(args))
         if args[:2] == ["exports", "get"]:
             return json.dumps({"name": "smart-turn-zh 2026-05-08"})
@@ -92,7 +92,7 @@ def test_export_id_skipped_when_already_cached(fake_repo, monkeypatch):
 def test_export_id_runs_download_and_adapt(fake_repo, monkeypatch):
     monkeypatch.setenv("WKST_WK_BINARY", "echo")  # passes shutil.which
 
-    def fake_run(args):
+    def fake_run(args, *, capture=False):
         # Simulate `wk exports adapt smart-turn` producing a train.parquet.
         if args[:3] == ["exports", "adapt", "smart-turn"]:
             out_idx = args.index("--out") + 1
@@ -118,7 +118,7 @@ def test_export_id_runs_download_and_adapt(fake_repo, monkeypatch):
 def test_export_id_with_dataset_name_override(fake_repo, monkeypatch):
     monkeypatch.setenv("WKST_WK_BINARY", "echo")
 
-    def fake_run(args):
+    def fake_run(args, *, capture=False):
         if args[:3] == ["exports", "adapt", "smart-turn"]:
             out_dir = Path(args[args.index("--out") + 1])
             out_dir.mkdir(parents=True, exist_ok=True)
