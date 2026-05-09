@@ -121,6 +121,22 @@ pick the epoch). **Test F1** = held-out F1 from `03_compare.ipynb` on
 ships. INT8 column comes from `04_export.ipynb` (only the winner gets
 exported). Always paste both.
 
+### Auto-rebuilt scorecard
+
+This section is overwritten by `wk-st report` from
+`checkpoints/_ledger.jsonl`. Don't hand-edit between the markers;
+the historical/annotated table below is the place for context that
+doesn't fit a results.json schema.
+
+<!-- wk-st:scorecard:start -->
+
+_Run `wk-st report` (or `make -C tools/smart-turn-pipeline report`)
+to fill this in once a run has gone through the wheel._
+
+<!-- wk-st:scorecard:end -->
+
+### Historical / annotated runs
+
 | # | RUN_NAME | Notebook | Threshold | Val F1 | Val P / R | Test F1 (FP32 / INT8) | Notes |
 |---|---|---|---|---|---|---|---|
 | 1 | _legacy_ | pre-refactor `02_train.ipynb`, per-batch pos_weight, fixed thr=0.5 | 0.50 | 0.8125 (ep 8) | 0.788 / 0.839 | _not recorded_ | First reference run. Removed by the smart_turn.py refactor. |

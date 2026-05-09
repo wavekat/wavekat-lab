@@ -1,6 +1,6 @@
 .PHONY: help setup setup-notebooks lab \
-        ci ci-audio-lab ci-cv-explorer \
-        audio-lab cv-explorer
+        ci ci-audio-lab ci-cv-explorer ci-smart-turn-pipeline \
+        audio-lab cv-explorer smart-turn-pipeline
 
 help:
 	@echo "wavekat-lab — root targets (repo-wide). Per-tool targets live in each tool's Makefile."
@@ -13,9 +13,10 @@ help:
 	@echo "  lab                Start Jupyter Lab on notebooks/"
 	@echo ""
 	@echo "CI:"
-	@echo "  ci                 Run CI for all tools"
-	@echo "  ci-audio-lab       → make -C tools/audio-lab ci"
-	@echo "  ci-cv-explorer     → make -C tools/cv-explorer ci  (cv-explorer's CI script)"
+	@echo "  ci                       Run CI for all tools"
+	@echo "  ci-audio-lab             → make -C tools/audio-lab ci"
+	@echo "  ci-cv-explorer           → make -C tools/cv-explorer ci  (cv-explorer's CI script)"
+	@echo "  ci-smart-turn-pipeline   → make -C tools/smart-turn-pipeline ci"
 	@echo ""
 	@echo "Per-tool development: cd into the tool and use its Makefile, e.g.:"
 	@echo "  cd tools/audio-lab && make help"
@@ -26,6 +27,7 @@ help:
 setup: setup-notebooks
 	$(MAKE) -C tools/audio-lab install
 	$(MAKE) -C tools/cv-explorer install
+	$(MAKE) -C tools/smart-turn-pipeline install
 
 setup-notebooks:
 	uv sync
@@ -37,7 +39,7 @@ lab:
 
 # ─── CI (delegates to each tool) ──────────────────────────────────────────────
 
-ci: ci-audio-lab ci-cv-explorer
+ci: ci-audio-lab ci-cv-explorer ci-smart-turn-pipeline
 
 ci-audio-lab:
 	$(MAKE) -C tools/audio-lab ci
@@ -45,3 +47,6 @@ ci-audio-lab:
 ci-cv-explorer:
 	cd tools/cv-explorer/worker && npm run typecheck
 	cd tools/cv-explorer/web && npm run build
+
+ci-smart-turn-pipeline:
+	$(MAKE) -C tools/smart-turn-pipeline ci
