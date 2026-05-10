@@ -192,6 +192,10 @@ def run(cfg: RunConfig) -> Path:
                 str(cfg.test_dir) if cfg.test_dir is not None
                 else str(cfg.dataset_dir)
             ),
+            # Threshold-tagged curve for the platform's model-curves UI
+            # (wavekat-platform/docs/12-model-curves.md). Empty list when
+            # the test set was degenerate; the UI hides the panel then.
+            "pr_curve": scored.get("pr_curve", {"n": 0, "points": []}),
         }
 
     # ---- 8. Persist results.json + run.lock.json + ledger entry
@@ -262,6 +266,10 @@ def _write_results(
                 "f1": threshold_payload.get("val_f1"),
                 "f1_at_0.5": threshold_payload.get("val_f1_at_0.5"),
                 "threshold": threshold_payload.get("threshold"),
+                # Same curve shape as test; hidden by the UI when absent.
+                "pr_curve": threshold_payload.get(
+                    "pr_curve", {"n": 0, "points": []}
+                ),
             },
             "test": test_metrics,
         },

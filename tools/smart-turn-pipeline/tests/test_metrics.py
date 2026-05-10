@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from wkst.metrics import bootstrap_f1_ci, continuation_recall
+from wkst.metrics import bootstrap_f1_ci, continuation_recall, pr_curve_points
 
 
 def test_bootstrap_ci_brackets_point_estimate():
@@ -71,3 +71,54 @@ def test_continuation_recall_independent_of_positive_recall():
     # Same negatives correct in case A; in case B, two FPs.
     assert cr_a == 1.0
     assert cr_b == 0.5
+
+
+def test_pr_curve_points_shape_and_keys():
+    rng = np.random.default_rng(0)
+    labels = rng.integers(0, 2, size=400)
+    probs = labels.astype(float) * 0.6 + rng.normal(0, 0.2, size=400) + 0.2
+
+    pts = pr_curve_points(labels, probs, n_points=50)
+    assert 1 <= len(pts) <= 50
+    for pt in pts:
+        assert set(pt.keys()) == {"t", "p", "r", "f1"}
+        assert 0.0 <= pt["p"] <= 1.0
+        assert 0.0 <= pt["r"] <= 1.0
+        assert 0.0 <= pt["f1"] <= 1.0
+
+
+def test_pr_curve_points_threshold_monotone():
+    """Sub-sampling should preserve threshold ordering — needed for the
+    platform UI's slider, which assumes points scan left-to-right in `t`."""
+    rng = np.random.default_rng(1)
+    labels = rng.integers(0, 2, size=600)
+    probs = rng.uniform(0, 1, size=600)
+    pts = pr_curve_points(labels, probs, n_points=100)
+    ts = [p["t"] for p in pts]
+    assert ts == sorted(ts)
+
+
+def test_pr_curve_points_downsamples_to_target():
+    rng = np.random.default_rng(2)
+    labels = rng.integers(0, 2, size=2000)
+    probs = rng.uniform(0, 1, size=2000)
+    pts = pr_curve_points(labels, probs, n_points=200)
+    assert len(pts) == 200
+
+
+def test_pr_curve_points_handles_empty():
+    assert pr_curve_points(np.array([]), np.array([])) == []
+
+
+def test_pr_curve_points_handles_single_class():
+    """All labels = 0: precision_recall_curve handles this; we should
+    still return something JSON-serialisable rather than crashing."""
+    labels = np.zeros(20, dtype=int)
+    probs = np.linspace(0.1, 0.9, 20)
+    pts = pr_curve_points(labels, probs)
+    # Either an empty list (no real positive thresholds) or a tiny one —
+    # the contract is "doesn't raise, returns a list of well-formed dicts".
+    assert isinstance(pts, list)
+    for pt in pts:
+        for key in ("t", "p", "r", "f1"):
+            assert isinstance(pt[key], float)

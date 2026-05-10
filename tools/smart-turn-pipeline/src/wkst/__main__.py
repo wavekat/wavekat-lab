@@ -189,6 +189,45 @@ def _parser() -> argparse.ArgumentParser:
         help="ONNX latency-bench iterations after warmup.",
     )
 
+    # ── re-eval ────────────────────────────────────────────────────────────
+    rev = sub.add_parser(
+        "re-eval",
+        help=(
+            "Re-score val (+ test) on a saved checkpoint and patch "
+            "metrics.{val,test}.pr_curve into the run's results.json. "
+            "Back-fill path for runs that pre-date commit e20f7a0."
+        ),
+    )
+    rev.add_argument(
+        "--checkpoint",
+        type=Path,
+        required=True,
+        help="Checkpoint directory produced by `wk-st run`.",
+    )
+    rev.add_argument(
+        "--dataset",
+        type=Path,
+        required=True,
+        help=(
+            "Dataset directory with validation.parquet (and optionally "
+            "test.parquet — used as the test set unless --test is given)."
+        ),
+    )
+    rev.add_argument(
+        "--test",
+        type=Path,
+        help=(
+            "Override the test set (must contain test.parquet). Useful "
+            "for the frozen-test workflow."
+        ),
+    )
+    rev.add_argument(
+        "--batch-size",
+        type=int,
+        default=16,
+        help="Inference batch size (default 16).",
+    )
+
     # ── report ─────────────────────────────────────────────────────────────
     rep = sub.add_parser(
         "report",
@@ -309,6 +348,24 @@ def main(argv: list[str] | None = None) -> int:
         print(
             f"INT8 lat  : p50 {b['int8']['bench']['p50_ms']:.1f} ms  "
             f"p95 {b['int8']['bench']['p95_ms']:.1f} ms"
+        )
+        return 0
+
+    if args.command == "re-eval":
+        from wkst.reeval import reeval
+
+        result = reeval(
+            checkpoint_dir=args.checkpoint,
+            dataset_dir=args.dataset,
+            test_dir=args.test,
+            batch_size=args.batch_size,
+        )
+        print(f"results      : {result.results_path}")
+        print(f"val pr_curve : {result.val_curve_n} points")
+        print(
+            f"test pr_curve: "
+            f"{result.test_curve_n} points"
+            + (" (no test.parquet found — skipped)" if result.test_curve_n == 0 else "")
         )
         return 0
 
