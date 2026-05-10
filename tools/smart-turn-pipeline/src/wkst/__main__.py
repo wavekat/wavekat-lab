@@ -228,6 +228,81 @@ def _parser() -> argparse.ArgumentParser:
         help="Inference batch size (default 16).",
     )
 
+    # ── eval-pipecat ───────────────────────────────────────────────────────
+    evp = sub.add_parser(
+        "eval-pipecat",
+        help=(
+            "Score a frozen pipecat-v3 ONNX on a test set and write a "
+            "results.json (with PR curve) into checkpoints/. No training, "
+            "no val pass — pure eval of an external baseline."
+        ),
+    )
+    evp.add_argument(
+        "--pipecat-onnx",
+        type=Path,
+        required=True,
+        help="Path to the pipecat-ai/smart-turn-v3 ONNX file.",
+    )
+    evp_test = evp.add_mutually_exclusive_group(required=True)
+    evp_test.add_argument(
+        "--test",
+        type=Path,
+        help="Local test dataset directory (must contain test.parquet).",
+    )
+    evp_test.add_argument(
+        "--test-export-id",
+        help=(
+            "wavekat-platform export id; the wheel runs `wk exports "
+            "download` + `wk exports adapt smart-turn` for you."
+        ),
+    )
+    evp.add_argument(
+        "--language",
+        default="zh",
+        help="Passed through to `wk exports adapt smart-turn --language`.",
+    )
+    evp.add_argument(
+        "--dataset-name",
+        help=(
+            "Override the on-disk slug for the test dataset. Defaults "
+            "to the export name slugified, or the --test directory's "
+            "leaf name."
+        ),
+    )
+    evp.add_argument(
+        "--run-name",
+        default="pipecat-v3",
+        help="Leaf dir under checkpoints/<dataset>/. Defaults to pipecat-v3.",
+    )
+    evp.add_argument(
+        "--feature-extractor",
+        default="openai/whisper-tiny",
+        help=(
+            "Anything WhisperFeatureExtractor.from_pretrained accepts. "
+            "Pipecat-v3 expects whisper-tiny preprocessing."
+        ),
+    )
+    evp.add_argument(
+        "--threshold",
+        type=float,
+        default=0.5,
+        help="Decision threshold for pipecat-v3 (ships at 0.5).",
+    )
+    evp.add_argument(
+        "--bootstrap-n",
+        type=int,
+        default=1000,
+        help="Bootstrap resamples for the F1 95%% CI.",
+    )
+    evp.add_argument(
+        "--out",
+        type=Path,
+        help=(
+            "Override the output directory. Defaults to "
+            "checkpoints/<dataset-name>/<run-name>/."
+        ),
+    )
+
     # ── report ─────────────────────────────────────────────────────────────
     rep = sub.add_parser(
         "report",
@@ -366,6 +441,49 @@ def main(argv: list[str] | None = None) -> int:
             f"test pr_curve: "
             f"{result.test_curve_n} points"
             + (" (no test.parquet found — skipped)" if result.test_curve_n == 0 else "")
+        )
+        return 0
+
+    if args.command == "eval-pipecat":
+        from wkst.eval_pipecat import eval_pipecat
+        from wkst.ingest import resolve_dataset
+
+        if args.test is not None:
+            test_dir = Path(args.test).expanduser().resolve()
+            test_export_id = None
+            dataset_name = args.dataset_name or test_dir.name
+        else:
+            print(f"resolving    : test export {args.test_export_id}", flush=True)
+            res = resolve_dataset(
+                export_id=args.test_export_id,
+                dataset_name=args.dataset_name,
+                language=args.language,
+            )
+            test_dir = res.dataset_dir
+            test_export_id = args.test_export_id
+            dataset_name = res.dataset_name
+            print(
+                f"test dataset : {test_dir.name} "
+                f"({'cached' if res.cached else 'fresh'})",
+                flush=True,
+            )
+
+        result = eval_pipecat(
+            pipecat_onnx=args.pipecat_onnx,
+            test_dir=test_dir,
+            test_export_id=test_export_id,
+            dataset_name=dataset_name,
+            run_name=args.run_name,
+            feature_extractor=args.feature_extractor,
+            threshold=args.threshold,
+            bootstrap_n=args.bootstrap_n,
+            out_dir=args.out,
+        )
+        print(f"results      : {result.results_path}")
+        print(
+            f"test         : F1 {result.test_f1:.3f}  "
+            f"AP {result.test_ap:.3f}  "
+            f"n={result.test_n}  pr_curve={result.pr_curve_n} pts"
         )
         return 0
 

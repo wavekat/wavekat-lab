@@ -28,6 +28,12 @@ design doc:
   entropy calibration), FP32-vs-INT8 drift on the test set, and CPU
   latency benchmark (p50/p95/p99). Patches the run's `results.json`
   with an `export` block.
+- `wk-st eval-pipecat` — score a frozen pipecat-v3 ONNX on a test
+  set and write a `results.json` (with **PR curve**) into
+  `checkpoints/<dataset>/<run-name>/`. No training, no val pass —
+  pipecat shows up as a first-class row in the ledger / scorecard
+  alongside trained recipes, and `wk-st compare --runs` can include
+  it directly.
 - `wk-st report` — regenerates the README scorecard from the ledger.
   Looks for `<!-- wk-st:scorecard:start -->` /
   `<!-- wk-st:scorecard:end -->` markers and rewrites just the
@@ -102,6 +108,27 @@ Produces `checkpoint_dir/onnx/smart-turn.onnx` (FP32) and
 the run's saved threshold, runs a CPU latency bench, and merges an
 `export` block into `results.json`.
 
+### `wk-st eval-pipecat`
+
+```sh
+# from a wavekat-platform export id — wheel does download + adapt
+wk-st eval-pipecat \
+  --pipecat-onnx checkpoints/pipecat/smart-turn-v3.onnx \
+  --test-export-id 7f862add-25a1-40d8-8fc0-fb4a2d4d5500
+
+# or from an already-adapted dataset directory
+wk-st eval-pipecat \
+  --pipecat-onnx checkpoints/pipecat/smart-turn-v3.onnx \
+  --test datasets/smart-turn-zh-test-frozen \
+  --run-name pipecat-v3.2-cpu
+```
+
+Writes `checkpoints/<dataset>/<run-name>/results.json` with a full
+`metrics.test` block (F1, F1 CI95, AP, continuation-recall, **PR
+curve points**) and appends to `_ledger.jsonl`. Threshold defaults
+to 0.5 (pipecat-v3 ships at that operating point); override with
+`--threshold`.
+
 ### `wk-st report`
 
 ```sh
@@ -157,6 +184,7 @@ src/wkst/
   metrics.py            # bootstrap F1 CI, continuation-class recall
   compare.py            # read mode + NxM cross-eval grid
   export.py             # FP32 + INT8 ONNX, drift, CPU latency bench
+  eval_pipecat.py       # score a pipecat-v3 ONNX, emit run-shaped results.json
   report.py             # ledger → README scorecard regeneration
   tracking.py           # optional W&B integration (off by default)
   ledger.py             # checkpoints/_ledger.jsonl reader/writer
