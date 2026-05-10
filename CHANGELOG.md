@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.0.13](https://github.com/wavekat/wavekat-lab/compare/v0.0.12...v0.0.13) (2026-05-10)
+
+
+### Features
+
+* **smart-turn:** persist PR/F1 curves ([#39](https://github.com/wavekat/wavekat-lab/issues/39)) ([810d284](https://github.com/wavekat/wavekat-lab/commit/810d2840e0e7d294827db3ab9ebe1cc4bc5a0912))
+* **smart-turn:** pipeline wheel — wk-st CLI ([94d63d9](https://github.com/wavekat/wavekat-lab/commit/94d63d92dac39bf8f9f0ee224b713fb95bd23287))
+* **smart-turn:** wk-st eval-pipecat — frozen pipecat-v3 with PR curves ([#40](https://github.com/wavekat/wavekat-lab/issues/40)) ([f187152](https://github.com/wavekat/wavekat-lab/commit/f1871521e3d9b9072d7002fa979e3a82d78fe022))
+
 ## [0.0.12](https://github.com/wavekat/wavekat-lab/compare/v0.0.11...v0.0.12) (2026-05-04)
 
 
