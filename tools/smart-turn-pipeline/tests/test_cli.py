@@ -141,6 +141,60 @@ def test_export_accepts_full_args():
     assert ns.bench_runs == 50
 
 
+def test_eval_pipecat_requires_onnx_and_test_source():
+    parser = _parser()
+    with pytest.raises(SystemExit):
+        parser.parse_args(["eval-pipecat"])
+    with pytest.raises(SystemExit):
+        parser.parse_args(["eval-pipecat", "--pipecat-onnx", "/tmp/x.onnx"])
+
+
+def test_eval_pipecat_rejects_both_test_flags():
+    parser = _parser()
+    with pytest.raises(SystemExit):
+        parser.parse_args([
+            "eval-pipecat",
+            "--pipecat-onnx", "/tmp/x.onnx",
+            "--test", "/tmp/d",
+            "--test-export-id", "abc",
+        ])
+
+
+def test_eval_pipecat_accepts_local_test_dir():
+    parser = _parser()
+    ns = parser.parse_args([
+        "eval-pipecat",
+        "--pipecat-onnx", "/tmp/x.onnx",
+        "--test", "/tmp/frozen-test",
+    ])
+    assert str(ns.pipecat_onnx) == "/tmp/x.onnx"
+    assert str(ns.test) == "/tmp/frozen-test"
+    assert ns.test_export_id is None
+    assert ns.run_name == "pipecat-v3"
+    assert ns.threshold == 0.5
+    assert ns.feature_extractor == "openai/whisper-tiny"
+
+
+def test_eval_pipecat_accepts_export_id_and_overrides():
+    parser = _parser()
+    ns = parser.parse_args([
+        "eval-pipecat",
+        "--pipecat-onnx", "/tmp/x.onnx",
+        "--test-export-id", "7f862add",
+        "--language", "en",
+        "--run-name", "pipecat-v3.2-cpu",
+        "--threshold", "0.55",
+        "--bootstrap-n", "250",
+        "--out", "/tmp/eval-out",
+    ])
+    assert ns.test_export_id == "7f862add"
+    assert ns.language == "en"
+    assert ns.run_name == "pipecat-v3.2-cpu"
+    assert ns.threshold == 0.55
+    assert ns.bootstrap_n == 250
+    assert str(ns.out) == "/tmp/eval-out"
+
+
 def test_report_print_only_flag():
     parser = _parser()
     ns = parser.parse_args(["report", "--print"])
