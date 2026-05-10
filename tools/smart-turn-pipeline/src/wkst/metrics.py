@@ -13,7 +13,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 import numpy as np
-from sklearn.metrics import f1_score, recall_score
+from sklearn.metrics import f1_score, precision_recall_curve, recall_score
 
 
 @dataclass(frozen=True)
@@ -99,3 +99,50 @@ def continuation_recall(
         return float("nan")
     # `pos_label=0` makes recall_score compute TN / (TN + FP).
     return float(recall_score(labels, preds, pos_label=0, zero_division=0))
+
+
+def pr_curve_points(
+    labels: np.ndarray,
+    probs: np.ndarray,
+    *,
+    n_points: int = 200,
+) -> list[dict]:
+    """Downsampled (threshold, precision, recall, f1) for plotting.
+
+    Returns a list shaped for the platform's ``metricsJson.metrics.{val,test}
+    .pr_curve.points`` field — see ``wavekat-platform/docs/12-model-curves.md``
+    §1. The smart-turn UI renders this list as one path per model with a
+    threshold slider; tagging each point with its threshold is what lets
+    the slider snap to a specific operating point.
+
+    Implementation notes:
+
+    - ``sklearn.metrics.precision_recall_curve`` returns ``p, r`` of length
+      ``n+1`` and ``t`` of length ``n``. We drop the trailing
+      ``(precision=1, recall=0)`` sentinel sklearn pads on so every saved
+      point has a real threshold attached.
+    - When the curve has more than ``n_points`` thresholds (typical for
+      our ~250-row test sets) we sub-sample evenly across the threshold
+      axis. 200 points is visually indistinguishable from 1k at a 600-px
+      chart width and keeps the per-run JSON growth around ~6 KB.
+    """
+    labels = np.asarray(labels).astype(int).flatten()
+    probs = np.asarray(probs).astype(float).flatten()
+    if labels.size == 0 or probs.size == 0:
+        return []
+
+    p, r, t = precision_recall_curve(labels, probs)
+    # Align p, r with t by dropping sklearn's (1.0, 0.0) sentinel pair.
+    p, r = p[:-1], r[:-1]
+    if len(t) == 0:
+        return []
+    if len(t) > n_points:
+        idx = np.linspace(0, len(t) - 1, n_points).astype(int)
+        p, r, t = p[idx], r[idx], t[idx]
+
+    denom = p + r
+    f1 = np.where(denom > 0, 2.0 * p * r / np.maximum(denom, 1e-12), 0.0)
+    return [
+        {"t": float(ti), "p": float(pi), "r": float(ri), "f1": float(fi)}
+        for ti, pi, ri, fi in zip(t, p, r, f1)
+    ]

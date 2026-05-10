@@ -237,10 +237,20 @@ def evaluate_and_save_threshold(trainer, eval_dataset, checkpoint_dir: Path) -> 
     best_f1 = float(f1s[best])
     default_f1 = float(f1_score(labels, (probs > 0.5).astype(int), zero_division=0))
 
+    # Sub-sampled (threshold, precision, recall, f1) for the platform's
+    # model-curves UI — see wavekat-platform/docs/12-model-curves.md. Lives
+    # alongside the scalars in threshold.json so a re-render of the val
+    # curve doesn't need the trainer back. Defer the import: keeps this
+    # function importable from notebooks that never call into wkst.
+    from wkst.metrics import pr_curve_points
+
+    pr_curve = pr_curve_points(labels, probs)
+
     payload = {
         "threshold": best_thr,
         "val_f1": best_f1,
         "val_f1_at_0.5": default_f1,
+        "pr_curve": {"n": len(pr_curve), "points": pr_curve},
     }
     (Path(checkpoint_dir) / "threshold.json").write_text(json.dumps(payload, indent=2))
 
@@ -326,6 +336,10 @@ def score_run(
     labels = np.concatenate(labels_chunks).astype(int)
     preds = (probs > threshold).astype(int)
 
+    from wkst.metrics import pr_curve_points
+
+    pr_curve = pr_curve_points(labels, probs)
+
     return {
         "threshold": threshold,
         "probs": probs,
@@ -335,6 +349,7 @@ def score_run(
         "recall": float(recall_score(labels, preds, zero_division=0)),
         "f1": float(f1_score(labels, preds, zero_division=0)),
         "average_precision": float(average_precision_score(labels, probs)),
+        "pr_curve": {"n": len(pr_curve), "points": pr_curve},
     }
 
 
@@ -375,6 +390,10 @@ def score_onnx(
     labels = np.array(labels, dtype=int)
     preds = (probs > threshold).astype(int)
 
+    from wkst.metrics import pr_curve_points
+
+    pr_curve = pr_curve_points(labels, probs)
+
     return {
         "threshold": threshold,
         "probs": probs,
@@ -384,4 +403,5 @@ def score_onnx(
         "recall": float(recall_score(labels, preds, zero_division=0)),
         "f1": float(f1_score(labels, preds, zero_division=0)),
         "average_precision": float(average_precision_score(labels, probs)),
+        "pr_curve": {"n": len(pr_curve), "points": pr_curve},
     }
