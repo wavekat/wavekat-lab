@@ -56,6 +56,9 @@ Each config can also enable per-config preprocessing: high-pass filter, RNNoise 
 | Backend | Description | Input |
 |---------|-------------|-------|
 | **pipecat** | Pipecat Smart Turn v3 — audio-based EOU detection | 16 kHz PCM audio |
+| **wavekat-zh** | WaveKat Mandarin fine-tune of Smart Turn v3 ([HF](https://huggingface.co/wavekat/smart-turn-ONNX)) — same architecture as pipecat, retrained on Chinese conversational audio | 16 kHz PCM audio |
+
+The `wavekat-zh` ONNX is downloaded from HuggingFace on first use and cached under `$HF_HOME/hub/` (default `~/.cache/huggingface/hub/`). For offline runs, set `WAVEKAT_TURN_MODEL_DIR` to a directory containing `zh/smart-turn-cpu.onnx`.
 
 ## Architecture
 

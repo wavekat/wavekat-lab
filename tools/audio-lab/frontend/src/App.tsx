@@ -41,6 +41,31 @@ import {
 const COLORS = ["#22c55e", "#3b82f6", "#f59e0b", "#ef4444", "#8b5cf6", "#ec4899"];
 const MAX_LOG_ENTRIES = 500;
 
+// Preferred ordering for the default turn-detection lineup. Backends not in
+// this list are appended after, alphabetically, so a future `wavekat-en` (or
+// similar) automatically shows up without code changes.
+const TURN_BACKEND_PRIORITY = ["pipecat", "wavekat-zh"];
+
+function buildDefaultTurnConfigs(
+  backends: Record<string, ParamInfo[]>,
+): TurnConfig[] {
+  const known = new Set(Object.keys(backends));
+  const ordered = [
+    ...TURN_BACKEND_PRIORITY.filter((b) => known.has(b)),
+    ...Object.keys(backends)
+      .filter((b) => !TURN_BACKEND_PRIORITY.includes(b))
+      .sort(),
+  ];
+  return ordered.map((backend, idx) => {
+    const params: Record<string, unknown> = {};
+    for (const p of backends[backend]) {
+      params[p.name] = p.default;
+    }
+    const n = idx + 1;
+    return { id: `turn-${n}`, label: backend, backend, params };
+  });
+}
+
 function downloadWav(samples: number[], sampleRate: number, filename: string) {
   const numSamples = samples.length;
   const buffer = new ArrayBuffer(44 + numSamples * 2);
@@ -379,17 +404,12 @@ function App() {
 
       case "turn_backends":
         setTurnBackends(msg.backends);
-        // Create default turn config on first receipt if none exist
+        // Seed defaults on first receipt — one config per backend so the
+        // upstream Pipecat model and the WaveKat fine-tunes show up
+        // side-by-side without manual setup.
         setTurnConfigs((prev) => {
           if (prev.length > 0) return prev;
-          const backendNames = Object.keys(msg.backends);
-          if (backendNames.length === 0) return prev;
-          const backend = backendNames[0];
-          const params: Record<string, unknown> = {};
-          for (const p of msg.backends[backend]) {
-            params[p.name] = p.default;
-          }
-          return [{ id: "turn-1", label: "turn-1", backend, params }];
+          return buildDefaultTurnConfigs(msg.backends);
         });
         break;
 
@@ -1115,14 +1135,8 @@ function App() {
             backends={turnBackends}
             onConfigsChange={setTurnConfigs}
             onResetDefaults={() => {
-              const backendNames = Object.keys(turnBackends);
-              if (backendNames.length === 0) return;
-              const backend = backendNames[0];
-              const params: Record<string, unknown> = {};
-              for (const p of turnBackends[backend]) {
-                params[p.name] = p.default;
-              }
-              setTurnConfigs([{ id: "turn-1", label: "turn-1", backend, params }]);
+              const defaults = buildDefaultTurnConfigs(turnBackends);
+              if (defaults.length > 0) setTurnConfigs(defaults);
             }}
           />
         )}
