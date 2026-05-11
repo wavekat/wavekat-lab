@@ -1,0 +1,117 @@
+name: Publish Smart Turn fine-tune to HuggingFace
+
+# Mirrors the wavekat-tts `export-onnx.yml` pattern, but skips the export
+# step — we publish an already-exported INT8 ONNX produced by `wk-st run`
+# + `wk-st export`. The checkpoint is expected to be reachable on the
+# runner (either committed under `checkpoints/` or fetched from a known
+# location before this workflow runs).
+
+on:
+  workflow_dispatch:
+    inputs:
+      checkpoint:
+        description: "Path to the checkpoint dir (relative to repo root, e.g. checkpoints/<run>)"
+        required: true
+        type: string
+      lang:
+        description: "Language code for the HF subdir (e.g. zh, ja)"
+        required: true
+        type: string
+      hf_repo:
+        description: "Target HuggingFace repo"
+        default: "wavekat/smart-turn-ONNX"
+        type: string
+      revision:
+        description: "HF branch/revision to push to (e.g. main, 2026-05-11)"
+        default: "main"
+        type: string
+      onnx_override:
+        description: "Optional path to a custom ONNX file (overrides <checkpoint>/onnx/smart-turn-int8.onnx)"
+        default: ""
+        type: string
+      dry_run:
+        description: "Stage files only — do not upload"
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  stage-and-publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install uv
+        run: pip install --upgrade uv
+
+      - name: Install wkst (publish extra)
+        working-directory: tools/smart-turn-pipeline
+        run: uv pip install --system -e .[publish]
+
+      - name: Stage the language artifact
+        if: ${{ inputs.dry_run }}
+        env:
+          CKPT: ${{ inputs.checkpoint }}
+          LANG: ${{ inputs.lang }}
+          ONNX: ${{ inputs.onnx_override }}
+          HF_REPO: ${{ inputs.hf_repo }}
+          REVISION: ${{ inputs.revision }}
+        run: |
+          python -m wkst publish \
+            --checkpoint "$CKPT" \
+            --lang "$LANG" \
+            --hf-repo "$HF_REPO" \
+            --revision "$REVISION" \
+            ${ONNX:+--onnx "$ONNX"}
+
+      - name: Stage and upload to HuggingFace
+        if: ${{ !inputs.dry_run }}
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          CKPT: ${{ inputs.checkpoint }}
+          LANG: ${{ inputs.lang }}
+          ONNX: ${{ inputs.onnx_override }}
+          HF_REPO: ${{ inputs.hf_repo }}
+          REVISION: ${{ inputs.revision }}
+        run: |
+          if [ -z "${HF_TOKEN}" ]; then
+            echo "::error::HF_TOKEN secret is not set on this repository."
+            exit 1
+          fi
+          python -m wkst publish \
+            --checkpoint "$CKPT" \
+            --lang "$LANG" \
+            --hf-repo "$HF_REPO" \
+            --revision "$REVISION" \
+            --upload \
+            --commit-message "publish: ${LANG} via run #${{ github.run_number }}" \
+            ${ONNX:+--onnx "$ONNX"}
+
+      - name: Job summary
+        if: always()
+        env:
+          HF_REPO: ${{ inputs.hf_repo }}
+          REVISION: ${{ inputs.revision }}
+          LANG: ${{ inputs.lang }}
+          DRY: ${{ inputs.dry_run }}
+        run: |
+          HF_URL="https://huggingface.co/${HF_REPO}/tree/${REVISION}/${LANG}"
+          {
+            echo "## Smart Turn publish"
+            echo ""
+            echo "| | |"
+            echo "|---|---|"
+            echo "| **Checkpoint** | \`${{ inputs.checkpoint }}\` |"
+            echo "| **Language** | \`${LANG}\` |"
+            echo "| **HF repo** | [${HF_REPO}](${HF_URL}) |"
+            echo "| **Revision** | \`${REVISION}\` |"
+            echo "| **Mode** | $([ \"$DRY\" = \"true\" ] && echo 'dry-run (stage only)' || echo 'uploaded') |"
+          } >> "$GITHUB_STEP_SUMMARY"

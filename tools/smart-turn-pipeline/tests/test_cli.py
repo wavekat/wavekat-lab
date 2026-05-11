@@ -78,6 +78,44 @@ def test_run_rejects_both_test_flags():
         ])
 
 
+def test_publish_requires_checkpoint_and_lang():
+    parser = _parser()
+    with pytest.raises(SystemExit):
+        parser.parse_args(["publish"])
+    with pytest.raises(SystemExit):
+        parser.parse_args(["publish", "--checkpoint", "/tmp/x"])
+
+
+def test_publish_parses_minimum_args():
+    parser = _parser()
+    ns = parser.parse_args([
+        "publish",
+        "--checkpoint", "/tmp/run",
+        "--lang", "zh",
+    ])
+    assert ns.command == "publish"
+    assert str(ns.checkpoint) == "/tmp/run"
+    assert ns.lang == "zh"
+    assert ns.hf_repo == "wavekat/smart-turn-ONNX"
+    assert ns.revision == "main"
+    assert ns.upload is False
+
+
+def test_publish_accepts_upload_and_onnx_override():
+    parser = _parser()
+    ns = parser.parse_args([
+        "publish",
+        "--checkpoint", "/tmp/run",
+        "--lang", "zh",
+        "--onnx", "/tmp/upstream.onnx",
+        "--upload",
+        "--revision", "2026-05-11",
+    ])
+    assert ns.upload is True
+    assert ns.revision == "2026-05-11"
+    assert str(ns.onnx) == "/tmp/upstream.onnx"
+
+
 def test_compare_requires_runs():
     parser = _parser()
     with pytest.raises(SystemExit):
