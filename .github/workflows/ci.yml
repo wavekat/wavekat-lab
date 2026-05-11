@@ -10,7 +10,39 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      audio-lab-backend: ${{ steps.filter.outputs.audio-lab-backend }}
+      audio-lab-frontend: ${{ steps.filter.outputs.audio-lab-frontend }}
+      cv-explorer: ${{ steps.filter.outputs.cv-explorer }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            audio-lab-backend:
+              - 'tools/audio-lab/backend/**'
+              - 'tools/audio-lab/Cargo.toml'
+              - 'tools/audio-lab/Cargo.lock'
+              - 'tools/audio-lab/Makefile'
+              - 'Makefile'
+              - '.github/workflows/ci.yml'
+            audio-lab-frontend:
+              - 'tools/audio-lab/frontend/**'
+              - 'tools/audio-lab/Makefile'
+              - 'Makefile'
+              - '.github/workflows/ci.yml'
+            cv-explorer:
+              - 'tools/cv-explorer/worker/**'
+              - 'tools/cv-explorer/web/**'
+              - 'Makefile'
+              - '.github/workflows/ci.yml'
+
   audio-lab-backend:
+    needs: changes
+    if: ${{ needs.changes.outputs.audio-lab-backend == 'true' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -38,6 +70,8 @@ jobs:
           fi
 
   audio-lab-frontend:
+    needs: changes
+    if: ${{ needs.changes.outputs.audio-lab-frontend == 'true' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -59,6 +93,8 @@ jobs:
           echo '```' >> "$GITHUB_STEP_SUMMARY"
 
   cv-explorer:
+    needs: changes
+    if: ${{ needs.changes.outputs.cv-explorer == 'true' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
