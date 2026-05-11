@@ -127,7 +127,7 @@ def export_run(
         input_names=["input_features"],
         output_names=["logits"],
         dynamic_axes={"input_features": {0: "batch"}, "logits": {0: "batch"}},
-        do_constant_folding=False,
+        do_constant_folding=True,
         dynamo=False,
     )
     onnx.checker.check_model(onnx.load(str(onnx_fp32)))
