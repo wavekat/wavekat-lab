@@ -39,6 +39,14 @@ design doc:
   `<!-- wk-st:scorecard:end -->` markers and rewrites just the
   region between them, leaving the historical / hand-curated section
   alone.
+- `wk-st publish` — stage a checkpoint's INT8 ONNX as
+  `<lang>/smart-turn-cpu.onnx` and (with `--upload`) push to
+  `wavekat/smart-turn-ONNX` on HuggingFace. Mirrors the wavekat-tts
+  publish pattern; each publish touches only its language's subdir
+  plus the shared model card. Consumed by [wavekat-turn][wt] (Rust,
+  via `hf-hub`) and by Pipecat's own Python loader.
+
+[wt]: https://github.com/wavekat/wavekat-turn
 
 ## Install
 
@@ -51,6 +59,13 @@ The `train` extra pulls in torch / transformers / datasets — same set
 the `notebooks/smart-turn/` extras group already needed. For local
 development of the CLI plumbing only (no training), drop `[train]`
 and the package installs deps-free.
+
+The lighter `publish` extra (just `huggingface_hub`) is for the
+`wk-st publish` flow on a CI runner that doesn't need torch:
+
+```sh
+uv pip install -e tools/smart-turn-pipeline[publish]
+```
 
 ## Usage
 
@@ -149,6 +164,90 @@ Markers in the README:
 If the markers are missing, `wk-st report` prints a hint and exits
 without touching the file.
 
+### `wk-st publish`
+
+Stage a fine-tuned checkpoint for HuggingFace and, optionally, push
+it. Mirrors the wavekat-tts publishing pattern in
+[`tools/qwen3-tts-onnx/`](https://github.com/wavekat/wavekat-tts/tree/main/tools/qwen3-tts-onnx).
+
+```sh
+# dry-run: stage only, don't touch HuggingFace
+wk-st publish \
+  --checkpoint checkpoints/smart-turn-zh-0503/specaugment \
+  --lang       zh
+
+# upload to wavekat/smart-turn-ONNX (requires HF_TOKEN in env)
+HF_TOKEN=hf_xxx wk-st publish \
+  --checkpoint checkpoints/smart-turn-zh-0503/specaugment \
+  --lang       zh \
+  --upload
+
+# pin the upload to a dated revision (kept in sync with wavekat-turn's
+# REVISION constant in src/audio/wavekat_download.rs)
+HF_TOKEN=hf_xxx wk-st publish \
+  --checkpoint checkpoints/smart-turn-zh-0503/specaugment \
+  --lang       zh \
+  --revision   2026-05-11 \
+  --upload
+```
+
+The default behaviour is **dry-run**: files are staged under
+`<checkpoint>/publish/` (override with `--staging-dir`) and nothing
+hits HuggingFace. `--upload` is the explicit opt-in; without it,
+`wk-st publish` is safe to script.
+
+Inside the staging dir:
+
+```
+<staging>/
+├── .gitattributes                   # LFS rules for *.onnx
+├── README.md                        # model card, languages table auto-filled
+└── <lang>/
+    ├── smart-turn-cpu.onnx          # the INT8 ONNX, renamed to match
+    │                                  # what wavekat-turn + Pipecat expect
+    └── results.json                 # slimmed test metrics (no PR curve,
+                                       # no absolute filesystem paths)
+```
+
+- The published file name is **`smart-turn-cpu.onnx`** (not
+  `smart-turn-int8.onnx`) so wavekat-turn's Rust loader and Pipecat's
+  Python loader can both consume it via the same path.
+- Each upload touches only `<lang>/` plus the top-level
+  `README.md` / `.gitattributes`, so publishing `ja` later won't
+  disturb existing `zh` files.
+- For a smoke test before any fine-tune exists, override the source
+  ONNX with `--onnx <path>` (e.g. point at the upstream Pipecat
+  file). The staging step works without a `results.json` — a
+  placeholder note is written so the model card still renders.
+
+#### Via GitHub Actions
+
+The `workflow_dispatch` action at
+[`.github/workflows/publish-smart-turn.yml`](../../.github/workflows/publish-smart-turn.yml)
+wraps the same CLI with `HF_TOKEN` from repo secrets. Inputs match
+the CLI flags 1:1 (`checkpoint`, `lang`, `hf_repo`, `revision`,
+`onnx_override`, `dry_run`). Job summary links to the resulting
+`https://huggingface.co/<repo>/tree/<revision>/<lang>` page on
+success.
+
+#### Consumer side
+
+Once `wavekat/smart-turn-ONNX/<lang>/smart-turn-cpu.onnx` is live,
+the Rust loader pulls it automatically:
+
+```rust
+use wavekat_turn::audio::{PipecatSmartTurn, SmartTurnVariant, SmartTurnLang};
+
+let detector = PipecatSmartTurn::with_variant(
+    SmartTurnVariant::Wavekat(SmartTurnLang::Zh),
+)?;
+```
+
+Requires `wavekat-turn = { features = ["wavekat-smart-turn"] }`. The
+`REVISION` constant in `wavekat-turn`'s `src/audio/wavekat_download.rs`
+pins which dated upload consumers see — bump it in lockstep with the
+crate release when you ship a new checkpoint.
+
 Outputs land in `checkpoints/<dataset-name>/<run-name>/`:
 
 ```
@@ -186,6 +285,8 @@ src/wkst/
   export.py             # FP32 + INT8 ONNX, drift, CPU latency bench
   eval_pipecat.py       # score a pipecat-v3 ONNX, emit run-shaped results.json
   report.py             # ledger → README scorecard regeneration
+  publish.py            # stage <lang>/smart-turn-cpu.onnx + upload to HF
+  publish_assets/       # model card template + .gitattributes
   tracking.py           # optional W&B integration (off by default)
   ledger.py             # checkpoints/_ledger.jsonl reader/writer
   _paths.py             # repo-root / datasets / checkpoints resolution
