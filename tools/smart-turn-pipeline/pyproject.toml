@@ -6,6 +6,11 @@ requires-python = ">=3.11"
 dependencies = []
 
 [project.optional-dependencies]
+# `wk-st publish` — stage + push to HuggingFace. Light dep, kept separate
+# from `train` so CI can install it without dragging torch in.
+publish = [
+    "huggingface_hub>=0.25",
+]
 # Heavy deps — only needed for `wk-st run` / `wk-st export`.
 # Mirrors the notebooks' `smart-turn` extras group.
 train = [
@@ -41,6 +46,10 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/wkst"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"src/wkst/publish_assets/model_card.md" = "wkst/publish_assets/model_card.md"
+"src/wkst/publish_assets/gitattributes" = "wkst/publish_assets/gitattributes"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
