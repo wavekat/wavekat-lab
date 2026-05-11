@@ -34,6 +34,9 @@ on:
         default: false
         type: boolean
 
+permissions:
+  contents: read
+
 jobs:
   stage-and-publish:
     runs-on: ubuntu-latest
