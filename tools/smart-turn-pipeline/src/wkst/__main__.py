@@ -303,76 +303,6 @@ def _parser() -> argparse.ArgumentParser:
         ),
     )
 
-    # ── publish ────────────────────────────────────────────────────────────
-    pub = sub.add_parser(
-        "publish",
-        help=(
-            "Stage a checkpoint's INT8 ONNX as <lang>/smart-turn-cpu.onnx "
-            "and (unless --dry-run) push to wavekat/smart-turn-ONNX on "
-            "HuggingFace. Mirrors the wavekat-tts publish pattern."
-        ),
-    )
-    pub.add_argument(
-        "--checkpoint",
-        type=Path,
-        required=True,
-        help=(
-            "Checkpoint directory produced by `wk-st run` + `wk-st export`. "
-            "Must contain onnx/smart-turn-int8.onnx (unless --onnx is set)."
-        ),
-    )
-    pub.add_argument(
-        "--lang",
-        required=True,
-        help="Language code for the HF subdir (e.g. zh, ja). Becomes <lang>/.",
-    )
-    pub.add_argument(
-        "--hf-repo",
-        default="wavekat/smart-turn-ONNX",
-        help="Target HF repo (org/name). Default: wavekat/smart-turn-ONNX.",
-    )
-    pub.add_argument(
-        "--revision",
-        default="main",
-        help="HF branch/revision to push to. Default: main.",
-    )
-    pub.add_argument(
-        "--staging-dir",
-        type=Path,
-        help=(
-            "Where to assemble files before upload. Defaults to "
-            "<checkpoint>/publish/. The dir is created if absent and "
-            "left in place after upload for inspection."
-        ),
-    )
-    pub.add_argument(
-        "--onnx",
-        type=Path,
-        help=(
-            "Override the source ONNX path. Useful for smoke tests "
-            "against the upstream Pipecat file before any zh fine-tune "
-            "exists."
-        ),
-    )
-    pub.add_argument(
-        "--commit-message",
-        help="Override the HuggingFace commit message.",
-    )
-    pub.add_argument(
-        "--dry-run",
-        action="store_true",
-        help="Stage files locally but do not upload. Default behaviour.",
-    )
-    pub.add_argument(
-        "--upload",
-        action="store_true",
-        help=(
-            "Actually push to HuggingFace. Requires HF_TOKEN in the "
-            "environment. Without this flag, `wk-st publish` only "
-            "stages files."
-        ),
-    )
-
     # ── report ─────────────────────────────────────────────────────────────
     rep = sub.add_parser(
         "report",
@@ -557,9 +487,6 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 0
 
-    if args.command == "publish":
-        return _publish(args)
-
     if args.command == "report":
         from wkst import report
 
@@ -613,59 +540,6 @@ def _compare(args) -> int:
         print(f"wrote {args.out}")
     else:
         print(body)
-    return 0
-
-
-def _publish(args) -> int:
-    """Implement the ``publish`` subcommand."""
-    import os
-
-    from wkst import publish as _pub
-
-    if args.dry_run and args.upload:
-        print(
-            "error: --dry-run and --upload are mutually exclusive",
-            file=sys.stderr,
-        )
-        return 2
-
-    dry_run = not args.upload  # default: stage only
-    staging_dir = (args.staging_dir or (args.checkpoint / "publish")).resolve()
-    staging_dir.mkdir(parents=True, exist_ok=True)
-
-    token: str | None = None
-    if not dry_run:
-        token = os.environ.get("HF_TOKEN")
-        if not token:
-            print(
-                "error: HF_TOKEN env var is required for --upload",
-                file=sys.stderr,
-            )
-            return 1
-
-    plan = _pub.publish_run(
-        checkpoint_dir=args.checkpoint.resolve(),
-        lang=args.lang,
-        staging_dir=staging_dir,
-        hf_repo=args.hf_repo,
-        revision=args.revision,
-        onnx_override=args.onnx.resolve() if args.onnx else None,
-        dry_run=dry_run,
-        commit_message=args.commit_message,
-        token=token,
-    )
-
-    print(f"staging dir : {plan.staging_dir}")
-    print(f"  onnx      : {plan.onnx_dest.relative_to(plan.staging_dir)}")
-    print(f"  results   : {plan.results_dest.relative_to(plan.staging_dir)}")
-    print(f"  model card: {plan.model_card_dest.relative_to(plan.staging_dir)}")
-    if dry_run:
-        print(
-            f"dry-run     : not uploading. Re-run with --upload (and "
-            f"HF_TOKEN set) to push to {plan.hf_repo}@{plan.revision}."
-        )
-    else:
-        print(f"uploaded    : https://huggingface.co/{plan.hf_repo}/tree/{plan.revision}")
     return 0
 
 
