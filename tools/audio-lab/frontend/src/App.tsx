@@ -119,6 +119,48 @@ function loadSavedConfigs(): VadConfig[] | null {
   return null;
 }
 
+const PIPELINE_CONFIGS_STORAGE_KEY = "lab-pipeline-configs";
+
+// VAD backend paired with each auto-seeded default pipeline. silero-vad gives
+// a reasonable neural baseline; falls back to the first available VAD config
+// if that backend isn't configured.
+const DEFAULT_PIPELINE_VAD_BACKEND = "silero-vad";
+
+function loadSavedPipelineConfigs(): PipelineConfig[] | null {
+  try {
+    const saved = localStorage.getItem(PIPELINE_CONFIGS_STORAGE_KEY);
+    if (saved !== null) {
+      const parsed = JSON.parse(saved) as PipelineConfig[];
+      // Treat an empty stored array as "not configured" so we still seed
+      // defaults — there's no UI to restore them otherwise.
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    }
+  } catch {
+    // ignore parse errors
+  }
+  return null;
+}
+
+function createDefaultPipelineConfigs(
+  vadConfigs: VadConfig[],
+  turnConfigs: TurnConfig[],
+): PipelineConfig[] {
+  if (vadConfigs.length === 0 || turnConfigs.length === 0) return [];
+  const vad =
+    vadConfigs.find((c) => c.backend === DEFAULT_PIPELINE_VAD_BACKEND) ??
+    vadConfigs[0];
+  return turnConfigs.map((tc, idx) => ({
+    id: `pipeline-${idx + 1}`,
+    label: `${vad.backend} + ${tc.backend}`,
+    vad_config_id: vad.id,
+    turn_config_id: tc.id,
+    speech_start_threshold: 0.5,
+    speech_end_threshold: 0.3,
+    min_silence_ms: 300,
+    reset_mode: "hard",
+  }));
+}
+
 function createDefaultConfigs(): VadConfig[] {
   return [
     {
@@ -208,13 +250,13 @@ function App() {
   const [vadOpen, setVadOpen] = useState(true);
   const [turnOpen, setTurnOpen] = useState(true);
   const [pipelineOpen, setPipelineOpen] = useState(true);
-  const [pipelineConfigs, setPipelineConfigs] = useState<PipelineConfig[]>(() => {
-    try {
-      const saved = localStorage.getItem("lab-pipeline-configs");
-      if (saved !== null) return JSON.parse(saved) as PipelineConfig[];
-    } catch { /* ignore */ }
-    return [];
-  });
+  const [pipelineConfigs, setPipelineConfigs] = useState<PipelineConfig[]>(
+    () => loadSavedPipelineConfigs() ?? [],
+  );
+  // Flips true once defaults have been seeded (or once a non-empty saved set
+  // has been loaded), so we don't repeatedly overwrite a user's empty state
+  // within the same session.
+  const pipelineSeededRef = useRef(false);
   const [pipelineResults, setPipelineResults] = useState<Record<string, PipelineResultPoint[]>>({});
 
   // Preprocessed data per config
@@ -239,8 +281,21 @@ function App() {
 
   // Persist pipeline configs to localStorage
   useEffect(() => {
-    localStorage.setItem("lab-pipeline-configs", JSON.stringify(pipelineConfigs));
+    localStorage.setItem(PIPELINE_CONFIGS_STORAGE_KEY, JSON.stringify(pipelineConfigs));
   }, [pipelineConfigs]);
+
+  // Seed default pipelines once both VAD and Turn configs are populated, so
+  // the upstream Pipecat vs WaveKat fine-tune comparison shows up by default.
+  useEffect(() => {
+    if (pipelineSeededRef.current) return;
+    if (pipelineConfigs.length > 0) {
+      pipelineSeededRef.current = true;
+      return;
+    }
+    if (configs.length === 0 || turnConfigs.length === 0) return;
+    pipelineSeededRef.current = true;
+    setPipelineConfigs(createDefaultPipelineConfigs(configs, turnConfigs));
+  }, [configs, turnConfigs, pipelineConfigs]);
 
   // Resolve playback samples based on selected source
   const playbackSamples =
