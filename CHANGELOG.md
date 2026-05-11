@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.0.14](https://github.com/wavekat/wavekat-lab/compare/v0.0.13...v0.0.14) (2026-05-11)
+
+
+### Features
+
+* **smart-turn:** wk-st publish — stage + push fine-tunes to HuggingFace ([a9a3a44](https://github.com/wavekat/wavekat-lab/commit/a9a3a44f4d039371715adf266bb5f3c42972bb3a))
+* **smart-turn:** wk-st publish — stage + push fine-tunes to HuggingFace ([#42](https://github.com/wavekat/wavekat-lab/issues/42)) ([2d4ce7e](https://github.com/wavekat/wavekat-lab/commit/2d4ce7e78605e533f13f5c9f60a84de199810436))
+
+
+### Bug Fixes
+
+* **smart-turn:** enable constant folding so int8 quant actually shrinks the ONNX ([#43](https://github.com/wavekat/wavekat-lab/issues/43)) ([dc0ba56](https://github.com/wavekat/wavekat-lab/commit/dc0ba563821a09d2633b2384cc569a2aa2adb752))
+
 ## [0.0.13](https://github.com/wavekat/wavekat-lab/compare/v0.0.12...v0.0.13) (2026-05-10)
 
 
