@@ -942,8 +942,119 @@ function App() {
 
       <Separator />
 
-      {/* Waveform and VAD Timelines */}
-      <div ref={waveformContainerRef} className="space-y-4">
+      <div className="flex flex-col lg:flex-row gap-6 lg:items-start">
+        <aside className="w-full lg:w-80 lg:shrink-0 space-y-4">
+          {/* VAD Config Panel */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <button
+                className="flex items-center gap-1 text-sm font-medium text-left"
+                onClick={() => setVadOpen((v) => !v)}
+              >
+                <span className="text-muted-foreground text-xs">{vadOpen ? "▼" : "▶"}</span>
+                VAD Configurations
+              </button>
+            </div>
+            {vadOpen && (
+              <ConfigPanel
+                configs={configs}
+                backends={backends}
+                preprocessingParams={preprocessingParams}
+                onConfigsChange={setConfigs}
+                onResetDefaults={() => setConfigs(createDefaultConfigs())}
+                showPreprocessed={showPreprocessed}
+                onShowPreprocessedChange={(configId, show) =>
+                  setShowPreprocessed((prev) => ({ ...prev, [configId]: show }))
+                }
+              />
+            )}
+          </div>
+
+          {/* Turn Detection Config Panel */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <button
+                className="flex items-center gap-1 text-sm font-medium text-left"
+                onClick={() => setTurnOpen((v) => !v)}
+              >
+                <span className="text-muted-foreground text-xs">{turnOpen ? "▼" : "▶"}</span>
+                Turn Detection
+              </button>
+            </div>
+            {turnOpen && (
+              <TurnConfigPanel
+                configs={turnConfigs}
+                backends={turnBackends}
+                onConfigsChange={setTurnConfigs}
+                onResetDefaults={() => {
+                  const backendNames = Object.keys(turnBackends);
+                  if (backendNames.length === 0) return;
+                  const backend = backendNames[0];
+                  const params: Record<string, unknown> = {};
+                  for (const p of turnBackends[backend]) {
+                    params[p.name] = p.default;
+                  }
+                  setTurnConfigs([{ id: "turn-1", label: "turn-1", backend, params }]);
+                }}
+              />
+            )}
+          </div>
+
+          {/* Pipeline Mode Config Panel */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <button
+                className="flex items-center gap-1 text-sm font-medium text-left"
+                onClick={() => setPipelineOpen((v) => !v)}
+              >
+                <span className="text-muted-foreground text-xs">{pipelineOpen ? "▼" : "▶"}</span>
+                Pipeline Mode
+              </button>
+            </div>
+            {pipelineOpen && (
+              <PipelineConfigPanel
+                configs={pipelineConfigs}
+                vadConfigs={configs}
+                turnConfigs={turnConfigs}
+                onConfigsChange={setPipelineConfigs}
+              />
+            )}
+          </div>
+
+          {/* ASR Config Panel */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <button
+                className="flex items-center gap-1 text-sm font-medium text-left"
+                onClick={() => setAsrOpen((v) => !v)}
+              >
+                <span className="text-muted-foreground text-xs">{asrOpen ? "▼" : "▶"}</span>
+                ASR
+              </button>
+            </div>
+            {asrOpen && (
+              <AsrConfigPanel
+                configs={asrConfigs}
+                backends={asrBackends}
+                onConfigsChange={setAsrConfigs}
+                onResetDefaults={() => {
+                  const backendNames = Object.keys(asrBackends);
+                  if (backendNames.length === 0) return;
+                  const backend = backendNames[0];
+                  const params: Record<string, unknown> = {};
+                  for (const p of asrBackends[backend]) {
+                    params[p.name] = p.default;
+                  }
+                  setAsrConfigs([{ id: "asr-1", label: "asr-1", backend, params }]);
+                }}
+              />
+            )}
+          </div>
+        </aside>
+
+        <main className="flex-1 min-w-0 space-y-4">
+          {/* Waveform and VAD Timelines */}
+          <div ref={waveformContainerRef} className="space-y-4">
         <div className="flex items-center gap-2">
           <h3
             className={`text-sm font-medium cursor-pointer select-none inline-flex items-center gap-1.5 ${
@@ -1234,109 +1345,8 @@ function App() {
             </div>
           );
         })}
-      </div>
-
-      <Separator />
-
-      {/* VAD Config Panel */}
-      <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <button
-            className="flex items-center gap-1 text-sm font-medium text-left"
-            onClick={() => setVadOpen((v) => !v)}
-          >
-            <span className="text-muted-foreground text-xs">{vadOpen ? "▼" : "▶"}</span>
-            VAD Configurations
-          </button>
-        </div>
-        {vadOpen && (
-          <ConfigPanel
-            configs={configs}
-            backends={backends}
-            preprocessingParams={preprocessingParams}
-            onConfigsChange={setConfigs}
-            onResetDefaults={() => setConfigs(createDefaultConfigs())}
-            showPreprocessed={showPreprocessed}
-            onShowPreprocessedChange={(configId, show) =>
-              setShowPreprocessed((prev) => ({ ...prev, [configId]: show }))
-            }
-          />
-        )}
-      </div>
-
-      {/* Turn Detection Config Panel */}
-      <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <button
-            className="flex items-center gap-1 text-sm font-medium text-left"
-            onClick={() => setTurnOpen((v) => !v)}
-          >
-            <span className="text-muted-foreground text-xs">{turnOpen ? "\u25BC" : "\u25B6"}</span>
-            Turn Detection
-          </button>
-        </div>
-        {turnOpen && (
-          <TurnConfigPanel
-            configs={turnConfigs}
-            backends={turnBackends}
-            onConfigsChange={setTurnConfigs}
-            onResetDefaults={() => {
-              const defaults = buildDefaultTurnConfigs(turnBackends);
-              if (defaults.length > 0) setTurnConfigs(defaults);
-            }}
-          />
-        )}
-      </div>
-
-      {/* Pipeline Mode Config Panel */}
-      <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <button
-            className="flex items-center gap-1 text-sm font-medium text-left"
-            onClick={() => setPipelineOpen((v) => !v)}
-          >
-            <span className="text-muted-foreground text-xs">{pipelineOpen ? "\u25BC" : "\u25B6"}</span>
-            Pipeline Mode
-          </button>
-        </div>
-        {pipelineOpen && (
-          <PipelineConfigPanel
-            configs={pipelineConfigs}
-            vadConfigs={configs}
-            turnConfigs={turnConfigs}
-            onConfigsChange={setPipelineConfigs}
-          />
-        )}
-      </div>
-
-      {/* ASR Config Panel */}
-      <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <button
-            className="flex items-center gap-1 text-sm font-medium text-left"
-            onClick={() => setAsrOpen((v) => !v)}
-          >
-            <span className="text-muted-foreground text-xs">{asrOpen ? "\u25BC" : "\u25B6"}</span>
-            ASR
-          </button>
-        </div>
-        {asrOpen && (
-          <AsrConfigPanel
-            configs={asrConfigs}
-            backends={asrBackends}
-            onConfigsChange={setAsrConfigs}
-            onResetDefaults={() => {
-              const backendNames = Object.keys(asrBackends);
-              if (backendNames.length === 0) return;
-              const backend = backendNames[0];
-              const params: Record<string, unknown> = {};
-              for (const p of asrBackends[backend]) {
-                params[p.name] = p.default;
-              }
-              setAsrConfigs([{ id: "asr-1", label: "asr-1", backend, params }]);
-            }}
-          />
-        )}
+          </div>
+        </main>
       </div>
 
       <Separator />
