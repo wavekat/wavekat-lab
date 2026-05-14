@@ -39,6 +39,53 @@ Three visible surfaces in the UI:
 No new full-page route; ASR is a tab next to VAD / Turn / Pipeline in the
 existing config sidebar.
 
+### Layout sketch
+
+```
+┌──────────────────────────────────────────────────────────────────────────────┐
+│  [Device ▾ MacBook Mic]  [● Record]  [Upload WAV]   ws ●connected      [Zoom]│
+├───────────────────────┬──────────────────────────────────────────────────────┤
+│  VAD Configs    [+]   │  Waveform   ████▆▅▃▂▁▁▂▃▅▇████▆▄▂▁ ▁▂▄▆██▆▃▁         │
+│  ▸ webrtc-aggressive  │  Spectrum   ▒▒▓▓██▓▓▒▒░░ … (FFT bins)                │
+│  ▸ silero-0.5         │                                                      │
+│                       │  VAD          ─/‾\─/‾‾\__/‾‾‾\___                    │
+│  Turn Configs   [+]   │  Turn         ·   ·F   ·U  ·F                        │
+│  ▸ pipecat-500ms      │  Pipeline     │start───────end (finished 87%)│       │
+│                       │                                                      │
+│  Pipeline       [+]   │  ┌─ ASR: sherpa-onnx · bilingual ──── copy all ─┐    │
+│  ▸ silero→pipecat     │  │ [00:01.2–00:03.4]  hello there how are you   │    │
+│                       │  │ [00:04.0–00:07.1]  我今天有点忙               │    │
+│  ▼ ASR Configs  [+]   │  │ [00:08.5–00:10.2]  let me check the schedule │    │
+│  ▸ sherpa · bilingual │  │   partial: …i'm running a bit late          │    │
+│  ▸ sherpa · zh (off)  │  │                                              │    │
+│    Backend  [sherpa▾] │  │  conf 0.92  · 14 finals · 1.3s avg latency  │    │
+│    Preset   [biling▾] │  └──────────────────────────────────────────────┘    │
+│    Label   [my-test ] │                                                      │
+│                       │  ┌─ Log ────────────────────────────────────────┐    │
+│                       │  │ 10:14:02 recv  asr [sherpa] partial "…late"  │    │
+│                       │  │ 10:14:03 recv  asr [sherpa] final "…late"    │    │
+│                       │  └──────────────────────────────────────────────┘    │
+└───────────────────────┴──────────────────────────────────────────────────────┘
+```
+
+Key behaviors:
+
+- **AsrConfigPanel** sits next to the VAD/Turn/Pipeline panels — same affordances
+  (add, label, enable, delete). Two params for now: backend dropdown (just
+  `sherpa-onnx`) and preset dropdown (`bilingual` / `en` / `zh` /
+  `paraformer-zh-en`).
+- **AsrTranscript card** renders one card per active ASR config, stacked. Each
+  card has committed finals (one per line with `[ts–end]` prefix) and a single
+  dimmed trailing line for the live partial that gets overwritten until it
+  commits as a final.
+- **Multi-config A/B** — running two configs gives two cards stacked, so you
+  can compare `bilingual` vs `zh` on the same audio.
+- **Cold-start** — first record after pulling shows `loading model…` in the
+  card body (just a status line, no separate spinner UI). After the ~75 MB HF
+  download, subsequent runs are instant.
+- **Footer of each card** — confidence of the latest final, count of finals,
+  average latency. Cheap stats; no fancy chart.
+
 ---
 
 ## Backend changes (`tools/audio-lab/backend`)
