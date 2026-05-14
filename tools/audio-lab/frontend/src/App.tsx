@@ -19,6 +19,11 @@ import { STATE_COLORS as TURN_STATE_COLORS } from "@/lib/turnColors";
 import { TurnConfigPanel } from "@/components/TurnConfigPanel";
 import { PipelineConfigPanel } from "@/components/PipelineConfigPanel";
 import { PipelineTimeline } from "@/components/PipelineTimeline";
+import { AsrConfigPanel } from "@/components/AsrConfigPanel";
+import {
+  AsrTranscript,
+  type AsrTranscriptState,
+} from "@/components/AsrTranscript";
 import {
   type Viewport,
   createDefaultViewport,
@@ -32,6 +37,7 @@ import {
   type TurnConfig,
   type PipelineConfig,
   type PipelineResultPoint,
+  type AsrConfig,
   type ParamInfo,
   type ServerMessage,
   type ConnectionState,
@@ -259,6 +265,17 @@ function App() {
   const pipelineSeededRef = useRef(false);
   const [pipelineResults, setPipelineResults] = useState<Record<string, PipelineResultPoint[]>>({});
 
+  const [asrBackends, setAsrBackends] = useState<Record<string, ParamInfo[]>>({});
+  const [asrConfigs, setAsrConfigs] = useState<AsrConfig[]>(() => {
+    try {
+      const saved = localStorage.getItem("lab-asr-configs");
+      if (saved !== null) return JSON.parse(saved) as AsrConfig[];
+    } catch { /* ignore */ }
+    return [];
+  });
+  const [asrTranscripts, setAsrTranscripts] = useState<Record<string, AsrTranscriptState>>({});
+  const [asrOpen, setAsrOpen] = useState(true);
+
   // Preprocessed data per config
   const [preprocessedSamples, setPreprocessedSamples] = useState<Record<string, number[]>>({});
   const [preprocessedSpectrumData, setPreprocessedSpectrumData] = useState<
@@ -296,6 +313,18 @@ function App() {
     pipelineSeededRef.current = true;
     setPipelineConfigs(createDefaultPipelineConfigs(configs, turnConfigs));
   }, [configs, turnConfigs, pipelineConfigs]);
+
+  // Persist asr configs to localStorage
+  useEffect(() => {
+    localStorage.setItem("lab-asr-configs", JSON.stringify(asrConfigs));
+  }, [asrConfigs]);
+
+  // Push asr config changes to the backend so the next start picks them up
+  useEffect(() => {
+    const socket = socketRef.current;
+    if (!socket || !connected) return;
+    socket.send({ type: "set_asr_configs", configs: asrConfigs });
+  }, [asrConfigs, connected]);
 
   // Resolve playback samples based on selected source
   const playbackSamples =
@@ -341,6 +370,7 @@ function App() {
     socket.send({ type: "list_devices" });
     socket.send({ type: "list_backends" });
     socket.send({ type: "list_turn_backends" });
+    socket.send({ type: "list_asr_backends" });
   }, []);
 
   const handleMessage = useCallback((msg: ServerMessage) => {
@@ -508,6 +538,59 @@ function App() {
         }));
         break;
 
+      case "asr_backends":
+        setAsrBackends(msg.backends);
+        break;
+
+      case "asr":
+        setAsrTranscripts((prev) => {
+          const existing: AsrTranscriptState = prev[msg.config_id] ?? {
+            ready: false,
+            finals: [],
+            partial: null,
+            warning: null,
+          };
+          switch (msg.kind) {
+            case "ready":
+              return {
+                ...prev,
+                [msg.config_id]: { ...existing, ready: true, warning: null },
+              };
+            case "partial":
+              return {
+                ...prev,
+                [msg.config_id]: { ...existing, partial: msg.text ?? null },
+              };
+            case "final":
+              return {
+                ...prev,
+                [msg.config_id]: {
+                  ...existing,
+                  partial: null,
+                  finals: [
+                    ...existing.finals,
+                    {
+                      ts_ms: msg.ts_ms ?? 0,
+                      end_ms: msg.end_ms ?? msg.ts_ms ?? 0,
+                      text: msg.text ?? "",
+                      confidence: msg.confidence ?? 1,
+                    },
+                  ],
+                },
+              };
+            case "warning":
+              return {
+                ...prev,
+                [msg.config_id]: { ...existing, warning: msg.message ?? null },
+              };
+            case "speech_started":
+            case "speech_ended":
+            default:
+              return prev;
+          }
+        });
+        break;
+
       case "done":
         recordingRef.current = false;
         setRecording(false);
@@ -563,6 +646,7 @@ function App() {
     setTurnResults({});
     setTurnTiming({});
     setPipelineResults({});
+    setAsrTranscripts({});
     setPlaybackSource("original");
     setTotalDurationMs(0);
     setSampleRate(null);
@@ -579,6 +663,7 @@ function App() {
     socket.send({ type: "set_configs", configs });
     socket.send({ type: "set_turn_configs", configs: turnConfigs });
     socket.send({ type: "set_pipeline_configs", configs: pipelineConfigs });
+    socket.send({ type: "set_asr_configs", configs: asrConfigs });
     socket.send({
       type: "start_recording",
       device_index: parseInt(selectedDevice),
@@ -612,6 +697,7 @@ function App() {
     setTurnResults({});
     setTurnTiming({});
     setPipelineResults({});
+    setAsrTranscripts({});
     setPlaybackSource("original");
     setTotalDurationMs(0);
     setSampleRate(null);
@@ -620,6 +706,7 @@ function App() {
     socket.send({ type: "set_configs", configs });
     socket.send({ type: "set_turn_configs", configs: turnConfigs });
     socket.send({ type: "set_pipeline_configs", configs: pipelineConfigs });
+    socket.send({ type: "set_asr_configs", configs: asrConfigs });
     socket.send({ type: "load_file", path, channel });
     setLoadingFile(true);
   };
@@ -1054,6 +1141,10 @@ function App() {
           />
         ))}
 
+        {asrConfigs.length > 0 && (
+          <AsrTranscript configs={asrConfigs} states={asrTranscripts} />
+        )}
+
         {/* Preprocessed Waveforms/Spectrograms/VAD - only for configs with showPreprocessed enabled */}
         {vadOpen && configs.filter((c) => showPreprocessed[c.id]).map((config) => {
           const configIndex = configs.findIndex((c) => c.id === config.id);
@@ -1214,6 +1305,36 @@ function App() {
             vadConfigs={configs}
             turnConfigs={turnConfigs}
             onConfigsChange={setPipelineConfigs}
+          />
+        )}
+      </div>
+
+      {/* ASR Config Panel */}
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <button
+            className="flex items-center gap-1 text-sm font-medium text-left"
+            onClick={() => setAsrOpen((v) => !v)}
+          >
+            <span className="text-muted-foreground text-xs">{asrOpen ? "\u25BC" : "\u25B6"}</span>
+            ASR
+          </button>
+        </div>
+        {asrOpen && (
+          <AsrConfigPanel
+            configs={asrConfigs}
+            backends={asrBackends}
+            onConfigsChange={setAsrConfigs}
+            onResetDefaults={() => {
+              const backendNames = Object.keys(asrBackends);
+              if (backendNames.length === 0) return;
+              const backend = backendNames[0];
+              const params: Record<string, unknown> = {};
+              for (const p of asrBackends[backend]) {
+                params[p.name] = p.default;
+              }
+              setAsrConfigs([{ id: "asr-1", label: "asr-1", backend, params }]);
+            }}
           />
         )}
       </div>
