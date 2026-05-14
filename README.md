@@ -18,7 +18,7 @@ A research repo for the [WaveKat](https://github.com/wavekat) project — intera
 ```
 wavekat-lab/
 ├── tools/
-│   ├── audio-lab/     Real-time VAD + Turn Detection comparison app (Rust + React)
+│   ├── audio-lab/     Real-time VAD + Turn Detection + ASR comparison app (Rust + React)
 │   └── cv-explorer/   Mozilla Common Voice dataset browser (Cloudflare Workers + React)
 ├── notebooks/         Jupyter notebooks (training, validation, dataset splits)
 └── docs/              Plans and design docs
@@ -30,9 +30,9 @@ Each tool is self-contained — its own Makefile, lockfiles, and build setup liv
 
 ### [Audio Lab](tools/audio-lab/) — `tools/audio-lab/`
 
-Web app for testing and comparing WaveKat library backends side by side in real time. Live mic capture, WAV upload, multi-config fan-out, VAD-gated pipeline mode, waveform + spectrogram + probability timelines.
+Web app for testing and comparing WaveKat library backends side by side in real time. Live mic capture, WAV upload, multi-config fan-out, VAD-gated pipeline mode, live ASR transcripts, waveform + spectrogram + probability timelines.
 
-Backends: webrtc-vad, silero-vad, ten-vad, firered-vad, pipecat smart-turn. [Details →](tools/audio-lab/README.md)
+Backends: webrtc-vad, silero-vad, ten-vad, firered-vad, pipecat smart-turn, sherpa-onnx ASR. [Details →](tools/audio-lab/README.md)
 
 ### [Common Voice Explorer](tools/cv-explorer/) — `tools/cv-explorer/`
 
