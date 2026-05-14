@@ -943,7 +943,7 @@ function App() {
       <Separator />
 
       <div className="flex flex-col lg:flex-row gap-6 lg:items-start">
-        <aside className="w-full lg:w-80 lg:shrink-0 space-y-4">
+        <aside className="w-full lg:w-96 lg:shrink-0 space-y-4">
           {/* VAD Config Panel */}
           <div className="space-y-3">
             <div className="flex items-center justify-between">

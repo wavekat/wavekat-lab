@@ -144,7 +144,7 @@ export function ConfigPanel({
         </Button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+      <div className="flex flex-col gap-3">
         {configs.map((config) => {
           const highPassEnabled = config.preprocessing?.high_pass_hz != null;
           const highPassValue = config.preprocessing?.high_pass_hz ?? 80;
@@ -152,15 +152,15 @@ export function ConfigPanel({
           return (
             <Card key={config.id} className="relative">
               <CardHeader className="pb-2">
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-sm">
+                <div className="flex items-center justify-between gap-2">
+                  <CardTitle className="text-sm flex-1 min-w-0">
                     <Input
-                      className="bg-transparent border-none shadow-none outline-none h-auto p-0 text-sm font-semibold"
+                      className="bg-transparent border-none shadow-none outline-none h-auto p-0 text-sm font-semibold w-full"
                       value={config.label}
                       onChange={(e) => updateConfig(config.id, { label: e.target.value })}
                     />
                   </CardTitle>
-                  <div className="flex gap-1">
+                  <div className="flex gap-1 shrink-0">
                     <Button
                       size="sm"
                       variant="ghost"
