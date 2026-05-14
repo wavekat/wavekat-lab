@@ -126,7 +126,7 @@ dependencies = [
 
 [[package]]
 name = "audio-lab"
-version = "0.0.14"
+version = "0.0.15"
 dependencies = [
  "axum",
  "clap 4.6.0",
