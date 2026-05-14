@@ -1,3 +1,4 @@
+mod asr;
 mod audio_source;
 mod pipeline;
 mod session;
