@@ -1,6 +1,6 @@
 # Audio Lab
 
-A web-based experimentation tool for testing and comparing [WaveKat](https://github.com/wavekat) library backends — VAD, turn detection, and more — side by side in real time.
+A web-based experimentation tool for testing and comparing [WaveKat](https://github.com/wavekat) library backends — VAD, turn detection, ASR, and more — side by side in real time.
 
 > [!WARNING]
 > Early development. Things may change.
@@ -10,6 +10,7 @@ A web-based experimentation tool for testing and comparing [WaveKat](https://git
 - **Live recording** — capture audio from your microphone server-side, stream results to the browser in real time
 - **File analysis** — upload a WAV file and run multiple configs against it at full speed
 - **Side-by-side comparison** — fan out audio to N configurations simultaneously and compare outputs
+- **Live transcripts** — stream partial + final ASR transcripts per config as audio plays
 - **Preprocessing exploration** — apply high-pass filters, RNNoise denoising, or normalization per-config
 - **Interactive visualization** — waveform, spectrogram, and probability timelines with synchronized zoom, pan, and hover
 
@@ -59,6 +60,17 @@ Each config can also enable per-config preprocessing: high-pass filter, RNNoise 
 | **wavekat-zh** | WaveKat Mandarin fine-tune of Smart Turn v3 ([HF](https://huggingface.co/wavekat/smart-turn-ONNX)) — same architecture as pipecat, retrained on Chinese conversational audio | 16 kHz PCM audio |
 
 The `wavekat-zh` ONNX is downloaded from HuggingFace on first use and cached under `$HF_HOME/hub/` (default `~/.cache/huggingface/hub/`). For offline runs, set `WAVEKAT_TURN_MODEL_DIR` to a directory containing `zh/smart-turn-cpu.onnx`.
+
+### ASR
+
+Streaming speech-to-text via [`wavekat-asr`](https://github.com/wavekat/wavekat-asr). Each ASR config gets a per-config transcript card stacked under the timelines: committed finals with `[mm:ss.s–mm:ss.s]` timestamps, a dimmed trailing line for the live partial, and footer stats (last confidence, count, average segment duration).
+
+| Backend | Description | Preset (`preset` param) |
+|---------|-------------|-------------------------|
+| **sherpa-onnx** | Local streaming Zipformer / Paraformer via [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) | `bilingual` (default, ZH+EN) · `en` · `zh` · `paraformer-zh-en` |
+
+> [!NOTE]
+> The first time you record or load a file with an ASR config enabled, sherpa-onnx downloads the chosen model from HuggingFace (~75 MB for `bilingual`) into `$HF_HOME` (default `~/.cache/huggingface/hub/`). The transcript card shows `loading model…` until the model is ready; subsequent runs are instant.
 
 ## Architecture
 
