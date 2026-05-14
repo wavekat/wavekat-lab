@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::time::Instant;
 use tokio::sync::{broadcast, mpsc};
-use wavekat_turn::audio::PipecatSmartTurn;
+use wavekat_turn::audio::{PipecatSmartTurn, SmartTurnLang, SmartTurnVariant};
 use wavekat_turn::{AudioFrame as TurnAudioFrame, AudioTurnDetector, TurnController, TurnState};
 use wavekat_vad::preprocessing::Preprocessor;
 use wavekat_vad::{FrameAdapter, ProcessTimings, VoiceActivityDetector};
@@ -444,28 +444,34 @@ pub fn run_turn_pipeline(
     result_rx
 }
 
-/// Create a turn detector from a config.
-fn create_turn_detector(config: &TurnConfig) -> Result<Box<dyn AudioTurnDetector>, String> {
+/// Construct the right `PipecatSmartTurn` variant for a turn config.
+///
+/// `wavekat-zh` uses the language-specialized fine-tune from
+/// `wavekat/smart-turn-ONNX` (Mandarin). The first call downloads the ONNX
+/// from HuggingFace and caches it under `$HF_HOME/hub/`; set
+/// `WAVEKAT_TURN_MODEL_DIR` to point at a pre-populated `<lang>/smart-turn-cpu.onnx`
+/// for offline use.
+fn build_smart_turn(config: &TurnConfig) -> Result<PipecatSmartTurn, String> {
     match config.backend.as_str() {
         "pipecat" => {
-            let detector = PipecatSmartTurn::new()
-                .map_err(|e| format!("failed to create PipecatSmartTurn: {e}"))?;
-            Ok(Box::new(detector))
+            PipecatSmartTurn::new().map_err(|e| format!("failed to create PipecatSmartTurn: {e}"))
+        }
+        "wavekat-zh" => {
+            PipecatSmartTurn::with_variant(SmartTurnVariant::Wavekat(SmartTurnLang::Zh))
+                .map_err(|e| format!("failed to create WaveKat zh Smart Turn: {e}"))
         }
         other => Err(format!("unknown turn backend: {other}")),
     }
 }
 
+/// Create a turn detector from a config.
+fn create_turn_detector(config: &TurnConfig) -> Result<Box<dyn AudioTurnDetector>, String> {
+    Ok(Box::new(build_smart_turn(config)?))
+}
+
 /// Create a TurnController-wrapped detector from a config.
 fn create_turn_controller(config: &TurnConfig) -> Result<TurnController<PipecatSmartTurn>, String> {
-    match config.backend.as_str() {
-        "pipecat" => {
-            let detector = PipecatSmartTurn::new()
-                .map_err(|e| format!("failed to create PipecatSmartTurn: {e}"))?;
-            Ok(TurnController::new(detector))
-        }
-        other => Err(format!("unknown turn backend: {other}")),
-    }
+    Ok(TurnController::new(build_smart_turn(config)?))
 }
 
 /// Run the pipeline mode: VAD-gated turn detection.
@@ -639,32 +645,35 @@ pub fn run_pipeline_mode(
 pub fn available_turn_backends() -> HashMap<String, Vec<ParamInfo>> {
     let mut backends = HashMap::new();
 
-    backends.insert(
-        "pipecat".to_string(),
-        vec![ParamInfo {
-            name: "predict_interval_ms".to_string(),
-            description: "Prediction interval".to_string(),
-            param_type: ParamType::Select(vec![
-                SelectOption {
-                    value: "200".into(),
-                    label: "200 ms".into(),
-                },
-                SelectOption {
-                    value: "500".into(),
-                    label: "500 ms".into(),
-                },
-                SelectOption {
-                    value: "1000".into(),
-                    label: "1000 ms".into(),
-                },
-                SelectOption {
-                    value: "2000".into(),
-                    label: "2000 ms".into(),
-                },
-            ]),
-            default: serde_json::json!("500"),
-        }],
-    );
+    let predict_interval_param = ParamInfo {
+        name: "predict_interval_ms".to_string(),
+        description: "Prediction interval".to_string(),
+        param_type: ParamType::Select(vec![
+            SelectOption {
+                value: "200".into(),
+                label: "200 ms".into(),
+            },
+            SelectOption {
+                value: "500".into(),
+                label: "500 ms".into(),
+            },
+            SelectOption {
+                value: "1000".into(),
+                label: "1000 ms".into(),
+            },
+            SelectOption {
+                value: "2000".into(),
+                label: "2000 ms".into(),
+            },
+        ]),
+        default: serde_json::json!("500"),
+    };
+
+    backends.insert("pipecat".to_string(), vec![predict_interval_param.clone()]);
+    // WaveKat Mandarin fine-tune of Pipecat Smart Turn — same tensor contract,
+    // different weights. Model is fetched from huggingface.co/wavekat/smart-turn-ONNX
+    // on first use and cached under $HF_HOME/hub/.
+    backends.insert("wavekat-zh".to_string(), vec![predict_interval_param]);
 
     backends
 }

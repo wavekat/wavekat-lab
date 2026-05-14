@@ -1,5 +1,5 @@
 SHELL := /bin/bash
-NVM   := source $$NVM_DIR/nvm.sh && nvm use --silent &&
+NVM   := source $$NVM_DIR/nvm.sh &&
 
 .PHONY: help \
         install install-backend install-frontend \
@@ -38,7 +38,7 @@ install-backend:
 	cargo install cargo-watch
 
 install-frontend:
-	$(NVM) cd frontend && npm install
+	$(NVM) cd frontend && nvm use --silent && npm install
 
 # ─── Development ──────────────────────────────────────────────────────────────
 
@@ -46,7 +46,7 @@ dev-backend:
 	cargo watch -x 'run -p audio-lab'
 
 dev-frontend:
-	$(NVM) cd frontend && npm run dev
+	$(NVM) cd frontend && nvm use --silent && npm run dev
 
 dev:
 	@echo "Run 'make dev-backend' and 'make dev-frontend' in separate terminals"
