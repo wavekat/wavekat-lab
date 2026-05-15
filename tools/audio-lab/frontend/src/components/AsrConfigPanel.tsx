@@ -10,23 +10,35 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import type { TurnConfig, ParamInfo } from "@/lib/websocket";
+import type { AsrConfig, ParamInfo } from "@/lib/websocket";
 
-export type { TurnConfig };
+export type { AsrConfig };
 
-interface TurnConfigPanelProps {
-  configs: TurnConfig[];
+interface AsrConfigPanelProps {
+  configs: AsrConfig[];
   backends: Record<string, ParamInfo[]>;
-  onConfigsChange: (configs: TurnConfig[]) => void;
+  /** preset name → `true` when its files are already in the HF cache. */
+  cacheStatus: Record<string, boolean>;
+  /** preset name → in-flight preload state. Absent when idle. */
+  preloadStatus: Record<string, "downloading" | "error">;
+  /** preset name → last error message, if the most recent preload failed. */
+  preloadErrors: Record<string, string>;
+  /** Trigger a server-side preload of the named preset. */
+  onPreload: (preset: string) => void;
+  onConfigsChange: (configs: AsrConfig[]) => void;
   onResetDefaults: () => void;
 }
 
-export function TurnConfigPanel({
+export function AsrConfigPanel({
   configs,
   backends,
+  cacheStatus,
+  preloadStatus,
+  preloadErrors,
+  onPreload,
   onConfigsChange,
   onResetDefaults,
-}: TurnConfigPanelProps) {
+}: AsrConfigPanelProps) {
   const [collapsedIds, setCollapsedIds] = useState<Set<string>>(new Set());
   const toggleCollapsed = (id: string) => {
     setCollapsedIds((prev) => {
@@ -40,7 +52,7 @@ export function TurnConfigPanel({
   const nextId = useMemo(() => {
     let max = 0;
     for (const c of configs) {
-      const match = c.id.match(/^turn-(\d+)$/);
+      const match = c.id.match(/^asr-(\d+)$/);
       if (match) {
         max = Math.max(max, parseInt(match[1], 10));
       }
@@ -58,10 +70,10 @@ export function TurnConfigPanel({
       params[p.name] = p.default;
     }
 
-    const id = `turn-${nextId}`;
+    const id = `asr-${nextId}`;
     onConfigsChange([
       ...configs,
-      { id, label: `turn-${nextId}`, backend, params },
+      { id, label: `asr-${nextId}`, backend, params },
     ]);
   };
 
@@ -69,21 +81,20 @@ export function TurnConfigPanel({
     onConfigsChange(configs.filter((c) => c.id !== id));
   };
 
-  const cloneConfig = (config: TurnConfig) => {
-    const id = `turn-${nextId}`;
+  const cloneConfig = (config: AsrConfig) => {
+    const id = `asr-${nextId}`;
     onConfigsChange([
       ...configs,
       { ...config, id, label: `${config.label} (copy)`, params: { ...config.params } },
     ]);
   };
 
-  const updateConfig = (id: string, updates: Partial<TurnConfig>) => {
+  const updateConfig = (id: string, updates: Partial<AsrConfig>) => {
     onConfigsChange(
       configs.map((c) => {
         if (c.id !== id) return c;
         const updated = { ...c, ...updates };
 
-        // If backend changed, reset params to defaults
         if (updates.backend && updates.backend !== c.backend) {
           const newParams: Record<string, unknown> = {};
           for (const p of backends[updates.backend] ?? []) {
@@ -163,7 +174,6 @@ export function TurnConfigPanel({
             </CardHeader>
             {!isCollapsed && (
             <CardContent className="space-y-3">
-              {/* Backend selection */}
               <div className="space-y-1">
                 <Label className="text-xs">Backend</Label>
                 <Select
@@ -183,7 +193,6 @@ export function TurnConfigPanel({
                 </Select>
               </div>
 
-              {/* Backend-specific params */}
               {(backends[config.backend] ?? []).map((param) => (
                 <div key={param.name} className="space-y-1">
                   <Label className="text-xs">{param.description}</Label>
@@ -222,6 +231,61 @@ export function TurnConfigPanel({
                   )}
                 </div>
               ))}
+
+              {config.backend === "sherpa-onnx" && (() => {
+                const preset = String(config.params.preset ?? "bilingual");
+                const cached = cacheStatus[preset] ?? false;
+                const inFlight = preloadStatus[preset];
+                const errMsg = preloadErrors[preset];
+
+                let badge: { text: string; tone: "ok" | "warn" | "info" | "err" };
+                if (inFlight === "downloading") {
+                  badge = { text: "Downloading…", tone: "info" };
+                } else if (inFlight === "error") {
+                  badge = { text: "Download failed", tone: "err" };
+                } else if (cached) {
+                  badge = { text: "Model cached", tone: "ok" };
+                } else {
+                  badge = { text: "Not downloaded", tone: "warn" };
+                }
+                const toneClass = {
+                  ok: "bg-green-100 text-green-800",
+                  warn: "bg-amber-100 text-amber-800",
+                  info: "bg-blue-100 text-blue-800",
+                  err: "bg-red-100 text-red-800",
+                }[badge.tone];
+
+                const showPreloadButton =
+                  inFlight !== "downloading" && (!cached || inFlight === "error");
+
+                return (
+                  <div className="border-t pt-3 space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className={`text-xs px-2 py-0.5 rounded ${toneClass}`}>
+                        {badge.text}
+                      </span>
+                      {showPreloadButton && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 text-xs"
+                          onClick={() => onPreload(preset)}
+                        >
+                          {inFlight === "error" ? "Retry preload" : "Preload model"}
+                        </Button>
+                      )}
+                    </div>
+                    {errMsg && inFlight === "error" && (
+                      <p className="text-xs text-red-700 break-words">{errMsg}</p>
+                    )}
+                    {!cached && inFlight !== "downloading" && (
+                      <p className="text-xs text-muted-foreground">
+                        First record/upload will download the model (~100&nbsp;MB) and may take a minute.
+                      </p>
+                    )}
+                  </div>
+                );
+              })()}
             </CardContent>
             )}
           </Card>

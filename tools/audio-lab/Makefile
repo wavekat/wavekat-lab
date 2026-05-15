@@ -16,6 +16,7 @@ help:
 	@echo "  install-frontend   Install npm dependencies (uses .nvmrc)"
 	@echo ""
 	@echo "Development:"
+	@echo "  dev                Run backend + frontend concurrently (Ctrl-C stops both)"
 	@echo "  dev-backend        Run backend with auto-rebuild"
 	@echo "  dev-frontend       Run frontend dev server"
 	@echo ""
@@ -49,7 +50,11 @@ dev-frontend:
 	$(NVM) cd frontend && nvm use --silent && npm run dev
 
 dev:
-	@echo "Run 'make dev-backend' and 'make dev-frontend' in separate terminals"
+	@echo "Starting audio-lab dev stack (backend + frontend). Ctrl-C to stop both."
+	@trap 'kill 0' INT TERM; \
+	$(MAKE) --no-print-directory dev-backend & \
+	$(MAKE) --no-print-directory dev-frontend & \
+	wait
 
 # ─── Quality ──────────────────────────────────────────────────────────────────
 

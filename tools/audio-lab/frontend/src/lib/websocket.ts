@@ -24,6 +24,21 @@ export interface TurnConfig {
   params: Record<string, unknown>;
 }
 
+export interface AsrConfig {
+  id: string;
+  label: string;
+  backend: string;
+  params: Record<string, unknown>;
+}
+
+export type AsrEventKind =
+  | "ready"
+  | "speech_started"
+  | "speech_ended"
+  | "partial"
+  | "final"
+  | "warning";
+
 export interface PipelineConfig {
   id: string;
   label: string;
@@ -64,6 +79,10 @@ export type ServerMessage =
   | { type: "turn_backends"; backends: Record<string, ParamInfo[]> }
   | { type: "turn"; config_id: string; timestamp_ms: number; state: string; confidence: number; latency_ms: number; stage_times: Array<{ name: string; us: number }> }
   | { type: "pipeline"; config_id: string; timestamp_ms: number; event: string; turn_state?: string; turn_confidence?: number; turn_latency_ms?: number; audio_duration_ms?: number }
+  | { type: "asr_backends"; backends: Record<string, ParamInfo[]> }
+  | { type: "asr"; config_id: string; kind: AsrEventKind; ts_ms?: number; end_ms?: number; text?: string; confidence?: number; message?: string }
+  | { type: "asr_cache_status"; presets: Record<string, boolean> }
+  | { type: "asr_preload"; preset: string; status: "started" | "completed" | "error"; message?: string }
   | { type: "done" }
   | { type: "error"; message: string };
 
@@ -78,7 +97,11 @@ export type ClientMessage =
   | { type: "set_spectrum_bins"; bins: number }
   | { type: "list_turn_backends" }
   | { type: "set_turn_configs"; configs: TurnConfig[] }
-  | { type: "set_pipeline_configs"; configs: PipelineConfig[] };
+  | { type: "set_pipeline_configs"; configs: PipelineConfig[] }
+  | { type: "list_asr_backends" }
+  | { type: "set_asr_configs"; configs: AsrConfig[] }
+  | { type: "list_asr_cache_status" }
+  | { type: "preload_asr_preset"; preset: string };
 
 export type MessageHandler = (msg: ServerMessage) => void;
 
@@ -106,6 +129,7 @@ interface StreamBatch {
   preprocessedAudioFrames: Map<string, number>;
   preprocessedSpectrumFrames: Map<string, number>;
   vad: Map<string, { count: number; minP: number; maxP: number; sumP: number }>;
+  asrPartials: Map<string, number>;
 }
 
 export class VadLabSocket {
@@ -247,8 +271,14 @@ export class VadLabSocket {
   }
 
   private logServerMessage(msg: ServerMessage) {
-    if (msg.type === "audio" || msg.type === "vad" || msg.type === "spectrum" ||
-        msg.type === "preprocessed_audio" || msg.type === "preprocessed_spectrum") {
+    if (
+      msg.type === "audio" ||
+      msg.type === "vad" ||
+      msg.type === "spectrum" ||
+      msg.type === "preprocessed_audio" ||
+      msg.type === "preprocessed_spectrum" ||
+      (msg.type === "asr" && msg.kind === "partial")
+    ) {
       this.addToBatch(msg);
     } else {
       // Flush any pending batch before logging a non-streaming message
@@ -257,7 +287,7 @@ export class VadLabSocket {
     }
   }
 
-  private addToBatch(msg: ServerMessage & { type: "audio" | "vad" | "spectrum" | "preprocessed_audio" | "preprocessed_spectrum" }) {
+  private addToBatch(msg: ServerMessage & { type: "audio" | "vad" | "spectrum" | "preprocessed_audio" | "preprocessed_spectrum" | "asr" }) {
     if (!this.streamBatch) {
       this.streamBatch = {
         audioFrames: 0,
@@ -267,6 +297,7 @@ export class VadLabSocket {
         preprocessedAudioFrames: new Map(),
         preprocessedSpectrumFrames: new Map(),
         vad: new Map(),
+        asrPartials: new Map(),
       };
       this.startBatchTimer();
     }
@@ -287,6 +318,11 @@ export class VadLabSocket {
       batch.preprocessedSpectrumFrames.set(
         msg.config_id,
         (batch.preprocessedSpectrumFrames.get(msg.config_id) ?? 0) + 1
+      );
+    } else if (msg.type === "asr") {
+      batch.asrPartials.set(
+        msg.config_id,
+        (batch.asrPartials.get(msg.config_id) ?? 0) + 1
       );
     } else {
       const existing = batch.vad.get(msg.config_id);
@@ -363,6 +399,10 @@ export class VadLabSocket {
       }
     }
 
+    for (const [configId, count] of batch.asrPartials) {
+      parts.push(`asr [${configId}]: ${count} partials`);
+    }
+
     if (parts.length > 0) {
       this.emitLog("recv", parts.join(" | "));
     }
@@ -382,6 +422,25 @@ function summarizeServer(msg: ServerMessage): string {
     case "turn_backends": return `turn_backends (${Object.keys(msg.backends).length})`;
     case "turn": return `turn [${msg.config_id}] t=${msg.timestamp_ms.toFixed(0)}ms state=${msg.state} conf=${msg.confidence.toFixed(2)} lat=${msg.latency_ms}ms`;
     case "pipeline": return `pipeline [${msg.config_id}] t=${msg.timestamp_ms.toFixed(0)}ms ${msg.event}${msg.turn_state ? ` ${msg.turn_state} ${((msg.turn_confidence ?? 0) * 100).toFixed(0)}%` : ""}`;
+    case "asr_backends": return `asr_backends (${Object.keys(msg.backends).length})`;
+    case "asr_cache_status": {
+      const cached = Object.values(msg.presets).filter(Boolean).length;
+      return `asr_cache_status (${cached}/${Object.keys(msg.presets).length} cached)`;
+    }
+    case "asr_preload": return `asr_preload [${msg.preset}] ${msg.status}${msg.message ? `: ${msg.message}` : ""}`;
+    case "asr": {
+      const where = msg.ts_ms !== undefined ? ` t=${msg.ts_ms.toFixed(0)}ms` : "";
+      if (msg.kind === "final") {
+        return `asr [${msg.config_id}] final${where} "${msg.text ?? ""}" conf=${(msg.confidence ?? 0).toFixed(2)}`;
+      }
+      if (msg.kind === "partial") {
+        return `asr [${msg.config_id}] partial${where} "${msg.text ?? ""}"`;
+      }
+      if (msg.kind === "warning") {
+        return `asr [${msg.config_id}] warning: ${msg.message ?? ""}`;
+      }
+      return `asr [${msg.config_id}] ${msg.kind}${where}`;
+    }
     case "done": return "done";
     case "error": return `error: ${msg.message}`;
   }
@@ -399,5 +458,9 @@ function summarizeClient(msg: ClientMessage): string {
     case "list_turn_backends": return "list_turn_backends";
     case "set_turn_configs": return `set_turn_configs (${msg.configs.length})`;
     case "set_pipeline_configs": return `set_pipeline_configs (${msg.configs.length})`;
+    case "list_asr_backends": return "list_asr_backends";
+    case "set_asr_configs": return `set_asr_configs (${msg.configs.length})`;
+    case "list_asr_cache_status": return "list_asr_cache_status";
+    case "preload_asr_preset": return `preload_asr_preset (${msg.preset})`;
   }
 }

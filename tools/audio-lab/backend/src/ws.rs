@@ -3,6 +3,7 @@ use futures::{SinkExt, StreamExt};
 use serde::{Deserialize, Serialize};
 use tokio::sync::broadcast;
 
+use crate::asr::{self, AsrConfig, AsrPreloadEvent, AsrServerEvent};
 use crate::audio_source::{self, AudioDevice, AudioFrame, ChannelSelect};
 use crate::pipeline;
 use crate::session::VadConfig;
@@ -45,6 +46,18 @@ pub enum ClientMessage {
     /// Set the active pipeline mode configs (replaces previous list).
     SetPipelineConfigs {
         configs: Vec<pipeline::PipelineConfig>,
+    },
+    ListAsrBackends,
+    /// Set the active ASR configs (replaces previous list).
+    SetAsrConfigs {
+        configs: Vec<AsrConfig>,
+    },
+    /// Ask the server which ASR presets are already in the HF cache.
+    ListAsrCacheStatus,
+    /// Trigger a download+load of the named preset so the model is on disk
+    /// before recording starts. Server replies with `AsrPreload` events.
+    PreloadAsrPreset {
+        preset: String,
     },
 }
 
@@ -124,10 +137,127 @@ pub enum ServerMessage {
         turn_latency_ms: Option<u64>,
         audio_duration_ms: Option<u64>,
     },
+    AsrBackends {
+        backends: std::collections::HashMap<String, Vec<pipeline::ParamInfo>>,
+    },
+    /// Per-preset HF cache state. `true` = files already on disk.
+    AsrCacheStatus {
+        presets: std::collections::HashMap<String, bool>,
+    },
+    /// Progress of a manual `PreloadAsrPreset` download.
+    /// `status` is one of `started` | `completed` | `error`.
+    AsrPreload {
+        preset: String,
+        status: String,
+        message: Option<String>,
+    },
+    /// ASR transcript event from a specific config. `kind` is one of
+    /// `ready` | `speech_started` | `speech_ended` | `partial` | `final` |
+    /// `warning`. Optional fields are populated based on `kind`.
+    Asr {
+        config_id: String,
+        kind: String,
+        ts_ms: Option<f64>,
+        end_ms: Option<f64>,
+        text: Option<String>,
+        confidence: Option<f32>,
+        message: Option<String>,
+    },
     Done,
     Error {
         message: String,
     },
+}
+
+/// Convert an internal `AsrServerEvent` into the flat wire shape.
+fn asr_event_to_server_msg(evt: AsrServerEvent) -> ServerMessage {
+    match evt {
+        AsrServerEvent::Ready { config_id } => ServerMessage::Asr {
+            config_id,
+            kind: "ready".into(),
+            ts_ms: None,
+            end_ms: None,
+            text: None,
+            confidence: None,
+            message: None,
+        },
+        AsrServerEvent::SpeechStarted { config_id, ts_ms } => ServerMessage::Asr {
+            config_id,
+            kind: "speech_started".into(),
+            ts_ms: Some(ts_ms),
+            end_ms: None,
+            text: None,
+            confidence: None,
+            message: None,
+        },
+        AsrServerEvent::SpeechEnded { config_id, ts_ms } => ServerMessage::Asr {
+            config_id,
+            kind: "speech_ended".into(),
+            ts_ms: Some(ts_ms),
+            end_ms: None,
+            text: None,
+            confidence: None,
+            message: None,
+        },
+        AsrServerEvent::Partial {
+            config_id,
+            ts_ms,
+            text,
+        } => ServerMessage::Asr {
+            config_id,
+            kind: "partial".into(),
+            ts_ms: Some(ts_ms),
+            end_ms: None,
+            text: Some(text),
+            confidence: None,
+            message: None,
+        },
+        AsrServerEvent::Final {
+            config_id,
+            ts_ms,
+            end_ms,
+            text,
+            confidence,
+        } => ServerMessage::Asr {
+            config_id,
+            kind: "final".into(),
+            ts_ms: Some(ts_ms),
+            end_ms: Some(end_ms),
+            text: Some(text),
+            confidence: Some(confidence),
+            message: None,
+        },
+        AsrServerEvent::Warning { config_id, message } => ServerMessage::Asr {
+            config_id,
+            kind: "warning".into(),
+            ts_ms: None,
+            end_ms: None,
+            text: None,
+            confidence: None,
+            message: Some(message),
+        },
+    }
+}
+
+/// Flatten an `AsrPreloadEvent` into the wire shape.
+fn asr_preload_to_server_msg(evt: AsrPreloadEvent) -> ServerMessage {
+    match evt {
+        AsrPreloadEvent::Started { preset } => ServerMessage::AsrPreload {
+            preset,
+            status: "started".into(),
+            message: None,
+        },
+        AsrPreloadEvent::Completed { preset } => ServerMessage::AsrPreload {
+            preset,
+            status: "completed".into(),
+            message: None,
+        },
+        AsrPreloadEvent::Error { preset, message } => ServerMessage::AsrPreload {
+            preset,
+            status: "error".into(),
+            message: Some(message),
+        },
+    }
 }
 
 fn send_msg(msg: &ServerMessage) -> Message {
@@ -140,13 +270,29 @@ pub async fn handle_ws(socket: WebSocket) {
     let mut configs: Vec<VadConfig> = Vec::new();
     let mut turn_configs: Vec<pipeline::TurnConfig> = Vec::new();
     let mut pipeline_configs: Vec<pipeline::PipelineConfig> = Vec::new();
+    let mut asr_configs: Vec<AsrConfig> = Vec::new();
     let mut stop_tx: Option<tokio::sync::oneshot::Sender<()>> = None;
     let mut spectrum_bins: usize = DEFAULT_OUTPUT_BINS;
 
     // Use small frames (10ms); FrameAdapter handles buffering to each backend's requirements
     let frame_duration_ms: u32 = 10;
 
-    while let Some(Ok(msg)) = ws_rx.next().await {
+    // Background channel for messages produced outside the main request/reply
+    // flow — currently just ASR preload events. Drains in the outer select.
+    // While a recording is running the inner loop owns ws_rx, so preload
+    // events queue here and flush once the recording arm returns.
+    let (bg_tx, mut bg_rx) = tokio::sync::mpsc::channel::<ServerMessage>(64);
+
+    loop {
+        let next = tokio::select! {
+            biased;
+            Some(msg) = bg_rx.recv() => {
+                let _ = ws_tx.send(send_msg(&msg)).await;
+                continue;
+            }
+            incoming = ws_rx.next() => incoming,
+        };
+        let Some(Ok(msg)) = next else { break };
         let Message::Text(text) = msg else {
             continue;
         };
@@ -211,6 +357,45 @@ pub async fn handle_ws(socket: WebSocket) {
                     "pipeline configs updated"
                 );
                 pipeline_configs = new_pipeline_configs;
+            }
+
+            ClientMessage::ListAsrBackends => {
+                let backends = asr::available_asr_backends();
+                let _ = ws_tx
+                    .send(send_msg(&ServerMessage::AsrBackends { backends }))
+                    .await;
+            }
+
+            ClientMessage::SetAsrConfigs {
+                configs: new_asr_configs,
+            } => {
+                tracing::info!(count = new_asr_configs.len(), "asr configs updated");
+                asr_configs = new_asr_configs;
+            }
+
+            ClientMessage::ListAsrCacheStatus => {
+                let presets = asr::cache_status_all();
+                let _ = ws_tx
+                    .send(send_msg(&ServerMessage::AsrCacheStatus { presets }))
+                    .await;
+            }
+
+            ClientMessage::PreloadAsrPreset { preset } => {
+                tracing::info!(preset = %preset, "asr preload requested");
+                let mut preload_rx = asr::preload_preset(preset.clone());
+                // Forward events through the bg channel so we don't block the
+                // main loop for the (potentially multi-minute) download.
+                let bg_tx = bg_tx.clone();
+                tokio::spawn(async move {
+                    while let Some(evt) = preload_rx.recv().await {
+                        let msg = asr_preload_to_server_msg(evt);
+                        if bg_tx.send(msg).await.is_err() {
+                            return;
+                        }
+                    }
+                    let presets = asr::cache_status_all();
+                    let _ = bg_tx.send(ServerMessage::AsrCacheStatus { presets }).await;
+                });
             }
 
             ClientMessage::SetSpectrumBins { bins: new_bins } => {
@@ -292,6 +477,13 @@ pub async fn handle_ws(socket: WebSocket) {
                             None
                         };
 
+                        // Start ASR pipeline
+                        let mut asr_rx = if !asr_configs.is_empty() {
+                            Some(asr::run_asr_pipeline(&asr_configs, &audio_tx, sample_rate))
+                        } else {
+                            None
+                        };
+
                         // Collect messages from both audio and pipeline into one channel
                         let (msg_tx, mut msg_rx) = tokio::sync::mpsc::channel::<ServerMessage>(512);
 
@@ -322,6 +514,19 @@ pub async fn handle_ws(socket: WebSocket) {
                                 }
                             }
                         });
+
+                        // Forward ASR transcript events
+                        if let Some(mut asr_rx) = asr_rx.take() {
+                            let msg_tx_asr = msg_tx.clone();
+                            tokio::spawn(async move {
+                                while let Some(evt) = asr_rx.recv().await {
+                                    let msg = asr_event_to_server_msg(evt);
+                                    if msg_tx_asr.send(msg).await.is_err() {
+                                        break;
+                                    }
+                                }
+                            });
+                        }
 
                         // Forward turn detection results
                         if let Some(mut turn_rx) = turn_rx.take() {
@@ -558,6 +763,13 @@ pub async fn handle_ws(socket: WebSocket) {
                     None
                 };
 
+                // Start ASR pipeline BEFORE emitting frames
+                let asr_rx = if !asr_configs.is_empty() {
+                    Some(asr::run_asr_pipeline(&asr_configs, &audio_tx, sample_rate))
+                } else {
+                    None
+                };
+
                 // Emit all frames at full speed (no sleep)
                 audio_source::emit_frames(
                     &loaded.samples,
@@ -671,7 +883,20 @@ pub async fn handle_ws(socket: WebSocket) {
                     });
                 }
 
-                // Task 4: Forward VAD + preprocessed results
+                // Task 4: Forward ASR transcript events
+                if let Some(mut asr_rx) = asr_rx {
+                    let msg_tx_asr = msg_tx.clone();
+                    tokio::spawn(async move {
+                        while let Some(evt) = asr_rx.recv().await {
+                            let msg = asr_event_to_server_msg(evt);
+                            if msg_tx_asr.send(msg).await.is_err() {
+                                break;
+                            }
+                        }
+                    });
+                }
+
+                // Task 5: Forward VAD + preprocessed results
                 let msg_tx_vad = msg_tx;
                 let vad_bins = spectrum_bins;
                 let mut result_rx = result_rx;

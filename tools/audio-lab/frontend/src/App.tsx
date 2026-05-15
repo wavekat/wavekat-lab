@@ -19,6 +19,11 @@ import { STATE_COLORS as TURN_STATE_COLORS } from "@/lib/turnColors";
 import { TurnConfigPanel } from "@/components/TurnConfigPanel";
 import { PipelineConfigPanel } from "@/components/PipelineConfigPanel";
 import { PipelineTimeline } from "@/components/PipelineTimeline";
+import { AsrConfigPanel } from "@/components/AsrConfigPanel";
+import {
+  AsrTranscript,
+  type AsrTranscriptState,
+} from "@/components/AsrTranscript";
 import {
   type Viewport,
   createDefaultViewport,
@@ -32,6 +37,7 @@ import {
   type TurnConfig,
   type PipelineConfig,
   type PipelineResultPoint,
+  type AsrConfig,
   type ParamInfo,
   type ServerMessage,
   type ConnectionState,
@@ -247,9 +253,15 @@ function App() {
   const [turnTiming, setTurnTiming] = useState<
     Record<string, { stageTotals: Record<string, number>; count: number }>
   >({});
-  const [vadOpen, setVadOpen] = useState(true);
-  const [turnOpen, setTurnOpen] = useState(true);
-  const [pipelineOpen, setPipelineOpen] = useState(true);
+  const [vadOpen, setVadOpen] = useState(false);
+  const [turnOpen, setTurnOpen] = useState(false);
+  const [pipelineOpen, setPipelineOpen] = useState(false);
+  // Result-panel toggles on the right side. Independent from the sidebar
+  // config toggles above so collapsing a config card doesn't hide the data.
+  const [vadResultsOpen, setVadResultsOpen] = useState(true);
+  const [turnResultsOpen, setTurnResultsOpen] = useState(true);
+  const [pipelineResultsOpen, setPipelineResultsOpen] = useState(true);
+  const [asrResultsOpen, setAsrResultsOpen] = useState(true);
   const [pipelineConfigs, setPipelineConfigs] = useState<PipelineConfig[]>(
     () => loadSavedPipelineConfigs() ?? [],
   );
@@ -258,6 +270,24 @@ function App() {
   // within the same session.
   const pipelineSeededRef = useRef(false);
   const [pipelineResults, setPipelineResults] = useState<Record<string, PipelineResultPoint[]>>({});
+
+  const [asrBackends, setAsrBackends] = useState<Record<string, ParamInfo[]>>({});
+  const [asrCacheStatus, setAsrCacheStatus] = useState<Record<string, boolean>>({});
+  // preset → "downloading" once a preload is in flight; cleared on completion.
+  const [asrPreloadStatus, setAsrPreloadStatus] = useState<
+    Record<string, "downloading" | "error">
+  >({});
+  // Last error message per preset (cleared when a fresh preload starts).
+  const [asrPreloadErrors, setAsrPreloadErrors] = useState<Record<string, string>>({});
+  const [asrConfigs, setAsrConfigs] = useState<AsrConfig[]>(() => {
+    try {
+      const saved = localStorage.getItem("lab-asr-configs");
+      if (saved !== null) return JSON.parse(saved) as AsrConfig[];
+    } catch { /* ignore */ }
+    return [];
+  });
+  const [asrTranscripts, setAsrTranscripts] = useState<Record<string, AsrTranscriptState>>({});
+  const [asrOpen, setAsrOpen] = useState(false);
 
   // Preprocessed data per config
   const [preprocessedSamples, setPreprocessedSamples] = useState<Record<string, number[]>>({});
@@ -296,6 +326,18 @@ function App() {
     pipelineSeededRef.current = true;
     setPipelineConfigs(createDefaultPipelineConfigs(configs, turnConfigs));
   }, [configs, turnConfigs, pipelineConfigs]);
+
+  // Persist asr configs to localStorage
+  useEffect(() => {
+    localStorage.setItem("lab-asr-configs", JSON.stringify(asrConfigs));
+  }, [asrConfigs]);
+
+  // Push asr config changes to the backend so the next start picks them up
+  useEffect(() => {
+    const socket = socketRef.current;
+    if (!socket || !connected) return;
+    socket.send({ type: "set_asr_configs", configs: asrConfigs });
+  }, [asrConfigs, connected]);
 
   // Resolve playback samples based on selected source
   const playbackSamples =
@@ -341,6 +383,8 @@ function App() {
     socket.send({ type: "list_devices" });
     socket.send({ type: "list_backends" });
     socket.send({ type: "list_turn_backends" });
+    socket.send({ type: "list_asr_backends" });
+    socket.send({ type: "list_asr_cache_status" });
   }, []);
 
   const handleMessage = useCallback((msg: ServerMessage) => {
@@ -508,6 +552,86 @@ function App() {
         }));
         break;
 
+      case "asr_backends":
+        setAsrBackends(msg.backends);
+        break;
+
+      case "asr_cache_status":
+        setAsrCacheStatus(msg.presets);
+        break;
+
+      case "asr_preload":
+        setAsrPreloadStatus((prev) => {
+          const next = { ...prev };
+          if (msg.status === "started") {
+            next[msg.preset] = "downloading";
+          } else if (msg.status === "completed") {
+            delete next[msg.preset];
+          } else {
+            next[msg.preset] = "error";
+          }
+          return next;
+        });
+        setAsrPreloadErrors((prev) => {
+          const next = { ...prev };
+          if (msg.status === "started" || msg.status === "completed") {
+            delete next[msg.preset];
+          } else if (msg.message) {
+            next[msg.preset] = msg.message;
+          }
+          return next;
+        });
+        break;
+
+      case "asr":
+        setAsrTranscripts((prev) => {
+          const existing: AsrTranscriptState = prev[msg.config_id] ?? {
+            ready: false,
+            finals: [],
+            partial: null,
+            warning: null,
+          };
+          switch (msg.kind) {
+            case "ready":
+              return {
+                ...prev,
+                [msg.config_id]: { ...existing, ready: true, warning: null },
+              };
+            case "partial":
+              return {
+                ...prev,
+                [msg.config_id]: { ...existing, partial: msg.text ?? null },
+              };
+            case "final":
+              return {
+                ...prev,
+                [msg.config_id]: {
+                  ...existing,
+                  partial: null,
+                  finals: [
+                    ...existing.finals,
+                    {
+                      ts_ms: msg.ts_ms ?? 0,
+                      end_ms: msg.end_ms ?? msg.ts_ms ?? 0,
+                      text: msg.text ?? "",
+                      confidence: msg.confidence ?? 1,
+                    },
+                  ],
+                },
+              };
+            case "warning":
+              return {
+                ...prev,
+                [msg.config_id]: { ...existing, warning: msg.message ?? null },
+              };
+            case "speech_started":
+            case "speech_ended":
+            default:
+              return prev;
+          }
+        });
+        break;
+
       case "done":
         recordingRef.current = false;
         setRecording(false);
@@ -563,6 +687,7 @@ function App() {
     setTurnResults({});
     setTurnTiming({});
     setPipelineResults({});
+    setAsrTranscripts({});
     setPlaybackSource("original");
     setTotalDurationMs(0);
     setSampleRate(null);
@@ -579,6 +704,7 @@ function App() {
     socket.send({ type: "set_configs", configs });
     socket.send({ type: "set_turn_configs", configs: turnConfigs });
     socket.send({ type: "set_pipeline_configs", configs: pipelineConfigs });
+    socket.send({ type: "set_asr_configs", configs: asrConfigs });
     socket.send({
       type: "start_recording",
       device_index: parseInt(selectedDevice),
@@ -612,6 +738,7 @@ function App() {
     setTurnResults({});
     setTurnTiming({});
     setPipelineResults({});
+    setAsrTranscripts({});
     setPlaybackSource("original");
     setTotalDurationMs(0);
     setSampleRate(null);
@@ -620,6 +747,7 @@ function App() {
     socket.send({ type: "set_configs", configs });
     socket.send({ type: "set_turn_configs", configs: turnConfigs });
     socket.send({ type: "set_pipeline_configs", configs: pipelineConfigs });
+    socket.send({ type: "set_asr_configs", configs: asrConfigs });
     socket.send({ type: "load_file", path, channel });
     setLoadingFile(true);
   };
@@ -855,8 +983,125 @@ function App() {
 
       <Separator />
 
-      {/* Waveform and VAD Timelines */}
-      <div ref={waveformContainerRef} className="space-y-4">
+      <div className="flex flex-col lg:flex-row gap-6 lg:items-start">
+        <aside className="w-full lg:w-96 lg:shrink-0 space-y-4">
+          {/* VAD Config Panel */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <button
+                className="flex items-center gap-1 text-sm font-medium text-left"
+                onClick={() => setVadOpen((v) => !v)}
+              >
+                <span className="text-muted-foreground text-xs">{vadOpen ? "▼" : "▶"}</span>
+                VAD Configurations
+              </button>
+            </div>
+            {vadOpen && (
+              <ConfigPanel
+                configs={configs}
+                backends={backends}
+                preprocessingParams={preprocessingParams}
+                onConfigsChange={setConfigs}
+                onResetDefaults={() => setConfigs(createDefaultConfigs())}
+                showPreprocessed={showPreprocessed}
+                onShowPreprocessedChange={(configId, show) =>
+                  setShowPreprocessed((prev) => ({ ...prev, [configId]: show }))
+                }
+              />
+            )}
+          </div>
+
+          {/* Turn Detection Config Panel */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <button
+                className="flex items-center gap-1 text-sm font-medium text-left"
+                onClick={() => setTurnOpen((v) => !v)}
+              >
+                <span className="text-muted-foreground text-xs">{turnOpen ? "▼" : "▶"}</span>
+                Turn Detection
+              </button>
+            </div>
+            {turnOpen && (
+              <TurnConfigPanel
+                configs={turnConfigs}
+                backends={turnBackends}
+                onConfigsChange={setTurnConfigs}
+                onResetDefaults={() => {
+                  const backendNames = Object.keys(turnBackends);
+                  if (backendNames.length === 0) return;
+                  const backend = backendNames[0];
+                  const params: Record<string, unknown> = {};
+                  for (const p of turnBackends[backend]) {
+                    params[p.name] = p.default;
+                  }
+                  setTurnConfigs([{ id: "turn-1", label: "turn-1", backend, params }]);
+                }}
+              />
+            )}
+          </div>
+
+          {/* Pipeline Mode Config Panel */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <button
+                className="flex items-center gap-1 text-sm font-medium text-left"
+                onClick={() => setPipelineOpen((v) => !v)}
+              >
+                <span className="text-muted-foreground text-xs">{pipelineOpen ? "▼" : "▶"}</span>
+                Pipeline Mode
+              </button>
+            </div>
+            {pipelineOpen && (
+              <PipelineConfigPanel
+                configs={pipelineConfigs}
+                vadConfigs={configs}
+                turnConfigs={turnConfigs}
+                onConfigsChange={setPipelineConfigs}
+              />
+            )}
+          </div>
+
+          {/* ASR Config Panel */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <button
+                className="flex items-center gap-1 text-sm font-medium text-left"
+                onClick={() => setAsrOpen((v) => !v)}
+              >
+                <span className="text-muted-foreground text-xs">{asrOpen ? "▼" : "▶"}</span>
+                ASR
+              </button>
+            </div>
+            {asrOpen && (
+              <AsrConfigPanel
+                configs={asrConfigs}
+                backends={asrBackends}
+                cacheStatus={asrCacheStatus}
+                preloadStatus={asrPreloadStatus}
+                preloadErrors={asrPreloadErrors}
+                onPreload={(preset) => {
+                  socketRef.current?.send({ type: "preload_asr_preset", preset });
+                }}
+                onConfigsChange={setAsrConfigs}
+                onResetDefaults={() => {
+                  const backendNames = Object.keys(asrBackends);
+                  if (backendNames.length === 0) return;
+                  const backend = backendNames[0];
+                  const params: Record<string, unknown> = {};
+                  for (const p of asrBackends[backend]) {
+                    params[p.name] = p.default;
+                  }
+                  setAsrConfigs([{ id: "asr-1", label: "asr-1", backend, params }]);
+                }}
+              />
+            )}
+          </div>
+        </aside>
+
+        <main className="flex-1 min-w-0 space-y-4">
+          {/* Waveform and VAD Timelines */}
+          <div ref={waveformContainerRef} className="space-y-4">
         <div className="flex items-center gap-2">
           <h3
             className={`text-sm font-medium cursor-pointer select-none inline-flex items-center gap-1.5 ${
@@ -926,13 +1171,13 @@ function App() {
         {configs.length > 0 && (
           <button
             className="flex items-center gap-1 text-sm font-medium pt-2 text-left w-full"
-            onClick={() => setVadOpen((v) => !v)}
+            onClick={() => setVadResultsOpen((v) => !v)}
           >
-            <span className="text-muted-foreground text-xs">{vadOpen ? "▼" : "▶"}</span>
+            <span className="text-muted-foreground text-xs">{vadResultsOpen ? "▼" : "▶"}</span>
             VAD Results
           </button>
         )}
-        {vadOpen && configs.map((config, i) => {
+        {vadResultsOpen && configs.map((config, i) => {
           const timing = vadTiming[config.id];
           const rtf = timing && timing.totalAudioMs > 0
             ? (timing.totalInferenceUs / 1000) / timing.totalAudioMs
@@ -971,9 +1216,9 @@ function App() {
         {turnConfigs.length > 0 && (
           <button
             className="flex items-center gap-1 text-sm font-medium pt-2 text-left w-full"
-            onClick={() => setTurnOpen((v) => !v)}
+            onClick={() => setTurnResultsOpen((v) => !v)}
           >
-            <span className="text-muted-foreground text-xs">{turnOpen ? "▼" : "▶"}</span>
+            <span className="text-muted-foreground text-xs">{turnResultsOpen ? "▼" : "▶"}</span>
             Turn Detection
             <div className="flex gap-2 items-center ml-auto" onClick={(e) => e.stopPropagation()}>
               {(["finished", "unfinished", "wait"] as const).map((state) => (
@@ -985,7 +1230,7 @@ function App() {
             </div>
           </button>
         )}
-        {turnOpen && turnConfigs.map((config) => {
+        {turnResultsOpen && turnConfigs.map((config) => {
           const timing = turnTiming[config.id];
           const stageAvgs = timing && timing.count > 0
             ? Object.entries(timing.stageTotals).map(([name, totalUs]) => ({
@@ -1019,9 +1264,9 @@ function App() {
         {pipelineConfigs.length > 0 && (
           <button
             className="flex items-center gap-1 text-sm font-medium pt-2 text-left w-full"
-            onClick={() => setPipelineOpen((v) => !v)}
+            onClick={() => setPipelineResultsOpen((v) => !v)}
           >
-            <span className="text-muted-foreground text-xs">{pipelineOpen ? "\u25BC" : "\u25B6"}</span>
+            <span className="text-muted-foreground text-xs">{pipelineResultsOpen ? "\u25BC" : "\u25B6"}</span>
             Pipeline Mode
             <div className="flex gap-2 items-center ml-auto" onClick={(e) => e.stopPropagation()}>
               {(["finished", "unfinished", "wait"] as const).map((state) => (
@@ -1033,7 +1278,7 @@ function App() {
             </div>
           </button>
         )}
-        {pipelineOpen && pipelineConfigs.map((config) => (
+        {pipelineResultsOpen && pipelineConfigs.map((config) => (
           <PipelineTimeline
             key={config.id}
             label={config.label}
@@ -1054,8 +1299,21 @@ function App() {
           />
         ))}
 
+        {asrConfigs.length > 0 && (
+          <button
+            className="flex items-center gap-1 text-sm font-medium pt-2 text-left w-full"
+            onClick={() => setAsrResultsOpen((v) => !v)}
+          >
+            <span className="text-muted-foreground text-xs">{asrResultsOpen ? "▼" : "▶"}</span>
+            ASR Transcripts
+          </button>
+        )}
+        {asrResultsOpen && asrConfigs.length > 0 && (
+          <AsrTranscript configs={asrConfigs} states={asrTranscripts} />
+        )}
+
         {/* Preprocessed Waveforms/Spectrograms/VAD - only for configs with showPreprocessed enabled */}
-        {vadOpen && configs.filter((c) => showPreprocessed[c.id]).map((config) => {
+        {vadResultsOpen && configs.filter((c) => showPreprocessed[c.id]).map((config) => {
           const configIndex = configs.findIndex((c) => c.id === config.id);
           const color = COLORS[configIndex % COLORS.length];
           const configSamples = preprocessedSamples[config.id] ?? [];
@@ -1143,79 +1401,8 @@ function App() {
             </div>
           );
         })}
-      </div>
-
-      <Separator />
-
-      {/* VAD Config Panel */}
-      <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <button
-            className="flex items-center gap-1 text-sm font-medium text-left"
-            onClick={() => setVadOpen((v) => !v)}
-          >
-            <span className="text-muted-foreground text-xs">{vadOpen ? "▼" : "▶"}</span>
-            VAD Configurations
-          </button>
-        </div>
-        {vadOpen && (
-          <ConfigPanel
-            configs={configs}
-            backends={backends}
-            preprocessingParams={preprocessingParams}
-            onConfigsChange={setConfigs}
-            onResetDefaults={() => setConfigs(createDefaultConfigs())}
-            showPreprocessed={showPreprocessed}
-            onShowPreprocessedChange={(configId, show) =>
-              setShowPreprocessed((prev) => ({ ...prev, [configId]: show }))
-            }
-          />
-        )}
-      </div>
-
-      {/* Turn Detection Config Panel */}
-      <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <button
-            className="flex items-center gap-1 text-sm font-medium text-left"
-            onClick={() => setTurnOpen((v) => !v)}
-          >
-            <span className="text-muted-foreground text-xs">{turnOpen ? "\u25BC" : "\u25B6"}</span>
-            Turn Detection
-          </button>
-        </div>
-        {turnOpen && (
-          <TurnConfigPanel
-            configs={turnConfigs}
-            backends={turnBackends}
-            onConfigsChange={setTurnConfigs}
-            onResetDefaults={() => {
-              const defaults = buildDefaultTurnConfigs(turnBackends);
-              if (defaults.length > 0) setTurnConfigs(defaults);
-            }}
-          />
-        )}
-      </div>
-
-      {/* Pipeline Mode Config Panel */}
-      <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <button
-            className="flex items-center gap-1 text-sm font-medium text-left"
-            onClick={() => setPipelineOpen((v) => !v)}
-          >
-            <span className="text-muted-foreground text-xs">{pipelineOpen ? "\u25BC" : "\u25B6"}</span>
-            Pipeline Mode
-          </button>
-        </div>
-        {pipelineOpen && (
-          <PipelineConfigPanel
-            configs={pipelineConfigs}
-            vadConfigs={configs}
-            turnConfigs={turnConfigs}
-            onConfigsChange={setPipelineConfigs}
-          />
-        )}
+          </div>
+        </main>
       </div>
 
       <Separator />
