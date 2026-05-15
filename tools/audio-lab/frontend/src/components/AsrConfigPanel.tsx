@@ -17,6 +17,14 @@ export type { AsrConfig };
 interface AsrConfigPanelProps {
   configs: AsrConfig[];
   backends: Record<string, ParamInfo[]>;
+  /** preset name → `true` when its files are already in the HF cache. */
+  cacheStatus: Record<string, boolean>;
+  /** preset name → in-flight preload state. Absent when idle. */
+  preloadStatus: Record<string, "downloading" | "error">;
+  /** preset name → last error message, if the most recent preload failed. */
+  preloadErrors: Record<string, string>;
+  /** Trigger a server-side preload of the named preset. */
+  onPreload: (preset: string) => void;
   onConfigsChange: (configs: AsrConfig[]) => void;
   onResetDefaults: () => void;
 }
@@ -24,6 +32,10 @@ interface AsrConfigPanelProps {
 export function AsrConfigPanel({
   configs,
   backends,
+  cacheStatus,
+  preloadStatus,
+  preloadErrors,
+  onPreload,
   onConfigsChange,
   onResetDefaults,
 }: AsrConfigPanelProps) {
@@ -219,6 +231,61 @@ export function AsrConfigPanel({
                   )}
                 </div>
               ))}
+
+              {config.backend === "sherpa-onnx" && (() => {
+                const preset = String(config.params.preset ?? "bilingual");
+                const cached = cacheStatus[preset] ?? false;
+                const inFlight = preloadStatus[preset];
+                const errMsg = preloadErrors[preset];
+
+                let badge: { text: string; tone: "ok" | "warn" | "info" | "err" };
+                if (inFlight === "downloading") {
+                  badge = { text: "Downloading…", tone: "info" };
+                } else if (inFlight === "error") {
+                  badge = { text: "Download failed", tone: "err" };
+                } else if (cached) {
+                  badge = { text: "Model cached", tone: "ok" };
+                } else {
+                  badge = { text: "Not downloaded", tone: "warn" };
+                }
+                const toneClass = {
+                  ok: "bg-green-100 text-green-800",
+                  warn: "bg-amber-100 text-amber-800",
+                  info: "bg-blue-100 text-blue-800",
+                  err: "bg-red-100 text-red-800",
+                }[badge.tone];
+
+                const showPreloadButton =
+                  inFlight !== "downloading" && (!cached || inFlight === "error");
+
+                return (
+                  <div className="border-t pt-3 space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className={`text-xs px-2 py-0.5 rounded ${toneClass}`}>
+                        {badge.text}
+                      </span>
+                      {showPreloadButton && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 text-xs"
+                          onClick={() => onPreload(preset)}
+                        >
+                          {inFlight === "error" ? "Retry preload" : "Preload model"}
+                        </Button>
+                      )}
+                    </div>
+                    {errMsg && inFlight === "error" && (
+                      <p className="text-xs text-red-700 break-words">{errMsg}</p>
+                    )}
+                    {!cached && inFlight !== "downloading" && (
+                      <p className="text-xs text-muted-foreground">
+                        First record/upload will download the model (~100&nbsp;MB) and may take a minute.
+                      </p>
+                    )}
+                  </div>
+                );
+              })()}
             </CardContent>
             )}
           </Card>

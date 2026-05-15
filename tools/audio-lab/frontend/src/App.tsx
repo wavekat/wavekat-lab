@@ -266,6 +266,13 @@ function App() {
   const [pipelineResults, setPipelineResults] = useState<Record<string, PipelineResultPoint[]>>({});
 
   const [asrBackends, setAsrBackends] = useState<Record<string, ParamInfo[]>>({});
+  const [asrCacheStatus, setAsrCacheStatus] = useState<Record<string, boolean>>({});
+  // preset → "downloading" once a preload is in flight; cleared on completion.
+  const [asrPreloadStatus, setAsrPreloadStatus] = useState<
+    Record<string, "downloading" | "error">
+  >({});
+  // Last error message per preset (cleared when a fresh preload starts).
+  const [asrPreloadErrors, setAsrPreloadErrors] = useState<Record<string, string>>({});
   const [asrConfigs, setAsrConfigs] = useState<AsrConfig[]>(() => {
     try {
       const saved = localStorage.getItem("lab-asr-configs");
@@ -371,6 +378,7 @@ function App() {
     socket.send({ type: "list_backends" });
     socket.send({ type: "list_turn_backends" });
     socket.send({ type: "list_asr_backends" });
+    socket.send({ type: "list_asr_cache_status" });
   }, []);
 
   const handleMessage = useCallback((msg: ServerMessage) => {
@@ -540,6 +548,33 @@ function App() {
 
       case "asr_backends":
         setAsrBackends(msg.backends);
+        break;
+
+      case "asr_cache_status":
+        setAsrCacheStatus(msg.presets);
+        break;
+
+      case "asr_preload":
+        setAsrPreloadStatus((prev) => {
+          const next = { ...prev };
+          if (msg.status === "started") {
+            next[msg.preset] = "downloading";
+          } else if (msg.status === "completed") {
+            delete next[msg.preset];
+          } else {
+            next[msg.preset] = "error";
+          }
+          return next;
+        });
+        setAsrPreloadErrors((prev) => {
+          const next = { ...prev };
+          if (msg.status === "started" || msg.status === "completed") {
+            delete next[msg.preset];
+          } else if (msg.message) {
+            next[msg.preset] = msg.message;
+          }
+          return next;
+        });
         break;
 
       case "asr":
@@ -1036,6 +1071,12 @@ function App() {
               <AsrConfigPanel
                 configs={asrConfigs}
                 backends={asrBackends}
+                cacheStatus={asrCacheStatus}
+                preloadStatus={asrPreloadStatus}
+                preloadErrors={asrPreloadErrors}
+                onPreload={(preset) => {
+                  socketRef.current?.send({ type: "preload_asr_preset", preset });
+                }}
                 onConfigsChange={setAsrConfigs}
                 onResetDefaults={() => {
                   const backendNames = Object.keys(asrBackends);

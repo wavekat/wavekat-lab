@@ -1,12 +1,16 @@
 use crate::audio_source::AudioFrame;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::path::PathBuf;
 use tokio::sync::{broadcast, mpsc};
 use wavekat_asr::backends::sherpa_onnx::{
     ModelPreset, SherpaOnnxAsr, BILINGUAL_ZH_EN, PARAFORMER_BILINGUAL_ZH_EN, PARAFORMER_ZH,
     ZIPFORMER_EN,
 };
 use wavekat_asr::{AudioFrame as AsrAudioFrame, Channel, StreamingAsr, TranscriptEvent};
+
+/// Canonical preset names (the wire values used by the frontend).
+pub const PRESET_NAMES: &[&str] = &["bilingual", "en", "zh", "paraformer-zh-en"];
 
 /// ASR target sample rate. Sherpa-onnx wants 16 kHz f32.
 const ASR_RATE: u32 = 16_000;
@@ -68,6 +72,107 @@ fn pick_preset(preset: &str) -> ModelPreset {
         "paraformer-zh-en" | "paraformer-bilingual" => PARAFORMER_BILINGUAL_ZH_EN,
         _ => BILINGUAL_ZH_EN,
     }
+}
+
+/// Root of the HuggingFace Hub cache, honouring `HF_HOME` like hf-hub does.
+fn hf_hub_cache_root() -> PathBuf {
+    if let Ok(p) = std::env::var("HF_HOME") {
+        return PathBuf::from(p).join("hub");
+    }
+    if let Ok(p) = std::env::var("HUGGINGFACE_HUB_CACHE") {
+        return PathBuf::from(p);
+    }
+    let home = std::env::var("HOME").unwrap_or_else(|_| ".".into());
+    PathBuf::from(home).join(".cache/huggingface/hub")
+}
+
+/// Convert an HF model id like `org/name` into the on-disk folder name
+/// (`models--org--name`) used inside `$HF_HOME/hub/`.
+fn model_dir_name(model_id: &str) -> String {
+    format!("models--{}", model_id.replace('/', "--"))
+}
+
+/// Check whether all files of a preset are present in the HF cache.
+///
+/// Looks for any snapshot under `$HF_HOME/hub/models--{id}/snapshots/*` that
+/// contains every file we'd download. Cheap (no model load, no network).
+fn preset_cached(preset: &ModelPreset) -> bool {
+    let model_root = hf_hub_cache_root().join(model_dir_name(preset.model_id));
+    let snapshots = model_root.join("snapshots");
+    let Ok(entries) = std::fs::read_dir(&snapshots) else {
+        return false;
+    };
+    let mut required: Vec<&'static str> = vec![preset.encoder, preset.decoder, preset.tokens];
+    if let Some(j) = preset.joiner {
+        required.push(j);
+    }
+    for entry in entries.flatten() {
+        let snap = entry.path();
+        if required.iter().all(|f| snap.join(f).exists()) {
+            return true;
+        }
+    }
+    false
+}
+
+/// Cache state for every published preset, keyed by canonical preset name.
+pub fn cache_status_all() -> HashMap<String, bool> {
+    let mut out = HashMap::new();
+    for &name in PRESET_NAMES {
+        out.insert(name.to_string(), preset_cached(&pick_preset(name)));
+    }
+    out
+}
+
+/// Preload event sent back to the frontend during a manual download.
+#[derive(Debug, Clone, Serialize)]
+#[serde(tag = "status", rename_all = "snake_case")]
+pub enum AsrPreloadEvent {
+    /// Loading has started (download may follow).
+    Started { preset: String },
+    /// Model files are on disk and the model loaded successfully.
+    Completed { preset: String },
+    /// Load failed; subsequent record attempts will likely fail too.
+    Error { preset: String, message: String },
+}
+
+/// Spawn a worker thread that loads (and downloads, if needed) the given
+/// preset, then drops the model. The point is to seed the HF cache so the
+/// next real recording session starts instantly.
+///
+/// Returns immediately; events flow on the returned receiver.
+pub fn preload_preset(preset_name: String) -> mpsc::Receiver<AsrPreloadEvent> {
+    let (tx, rx) = mpsc::channel::<AsrPreloadEvent>(8);
+    let preset = pick_preset(&preset_name);
+
+    std::thread::Builder::new()
+        .name(format!("asr-preload-{preset_name}"))
+        .spawn(move || {
+            let _ = tx.blocking_send(AsrPreloadEvent::Started {
+                preset: preset_name.clone(),
+            });
+            tracing::info!(preset = %preset_name, "preloading sherpa-onnx model");
+
+            match SherpaOnnxAsr::with_preset(preset) {
+                Ok((asr, _rx)) => {
+                    drop(asr);
+                    tracing::info!(preset = %preset_name, "preload complete");
+                    let _ = tx.blocking_send(AsrPreloadEvent::Completed {
+                        preset: preset_name,
+                    });
+                }
+                Err(e) => {
+                    tracing::warn!(preset = %preset_name, "preload failed: {e}");
+                    let _ = tx.blocking_send(AsrPreloadEvent::Error {
+                        preset: preset_name,
+                        message: e.to_string(),
+                    });
+                }
+            }
+        })
+        .expect("spawn asr preload thread");
+
+    rx
 }
 
 /// Linear-interpolation resample of f32 samples. Matches the quality of the

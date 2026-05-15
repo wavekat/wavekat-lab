@@ -81,6 +81,8 @@ export type ServerMessage =
   | { type: "pipeline"; config_id: string; timestamp_ms: number; event: string; turn_state?: string; turn_confidence?: number; turn_latency_ms?: number; audio_duration_ms?: number }
   | { type: "asr_backends"; backends: Record<string, ParamInfo[]> }
   | { type: "asr"; config_id: string; kind: AsrEventKind; ts_ms?: number; end_ms?: number; text?: string; confidence?: number; message?: string }
+  | { type: "asr_cache_status"; presets: Record<string, boolean> }
+  | { type: "asr_preload"; preset: string; status: "started" | "completed" | "error"; message?: string }
   | { type: "done" }
   | { type: "error"; message: string };
 
@@ -97,7 +99,9 @@ export type ClientMessage =
   | { type: "set_turn_configs"; configs: TurnConfig[] }
   | { type: "set_pipeline_configs"; configs: PipelineConfig[] }
   | { type: "list_asr_backends" }
-  | { type: "set_asr_configs"; configs: AsrConfig[] };
+  | { type: "set_asr_configs"; configs: AsrConfig[] }
+  | { type: "list_asr_cache_status" }
+  | { type: "preload_asr_preset"; preset: string };
 
 export type MessageHandler = (msg: ServerMessage) => void;
 
@@ -419,6 +423,11 @@ function summarizeServer(msg: ServerMessage): string {
     case "turn": return `turn [${msg.config_id}] t=${msg.timestamp_ms.toFixed(0)}ms state=${msg.state} conf=${msg.confidence.toFixed(2)} lat=${msg.latency_ms}ms`;
     case "pipeline": return `pipeline [${msg.config_id}] t=${msg.timestamp_ms.toFixed(0)}ms ${msg.event}${msg.turn_state ? ` ${msg.turn_state} ${((msg.turn_confidence ?? 0) * 100).toFixed(0)}%` : ""}`;
     case "asr_backends": return `asr_backends (${Object.keys(msg.backends).length})`;
+    case "asr_cache_status": {
+      const cached = Object.values(msg.presets).filter(Boolean).length;
+      return `asr_cache_status (${cached}/${Object.keys(msg.presets).length} cached)`;
+    }
+    case "asr_preload": return `asr_preload [${msg.preset}] ${msg.status}${msg.message ? `: ${msg.message}` : ""}`;
     case "asr": {
       const where = msg.ts_ms !== undefined ? ` t=${msg.ts_ms.toFixed(0)}ms` : "";
       if (msg.kind === "final") {
@@ -451,5 +460,7 @@ function summarizeClient(msg: ClientMessage): string {
     case "set_pipeline_configs": return `set_pipeline_configs (${msg.configs.length})`;
     case "list_asr_backends": return "list_asr_backends";
     case "set_asr_configs": return `set_asr_configs (${msg.configs.length})`;
+    case "list_asr_cache_status": return "list_asr_cache_status";
+    case "preload_asr_preset": return `preload_asr_preset (${msg.preset})`;
   }
 }
