@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -31,6 +31,16 @@ export function ConfigPanel({
   showPreprocessed,
   onShowPreprocessedChange,
 }: ConfigPanelProps) {
+  const [collapsedIds, setCollapsedIds] = useState<Set<string>>(new Set());
+  const toggleCollapsed = (id: string) => {
+    setCollapsedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
   // Derive nextId from existing configs so we never call setState in an effect.
   const nextId = useMemo(() => {
     let max = 0;
@@ -149,11 +159,20 @@ export function ConfigPanel({
           const highPassEnabled = config.preprocessing?.high_pass_hz != null;
           const highPassValue = config.preprocessing?.high_pass_hz ?? 80;
 
+          const isCollapsed = collapsedIds.has(config.id);
           return (
             <Card key={config.id} className="relative">
               <CardHeader className="pb-2">
                 <div className="flex items-center justify-between gap-2">
-                  <CardTitle className="text-sm flex-1 min-w-0">
+                  <CardTitle className="text-sm flex-1 min-w-0 flex items-center gap-1">
+                    <button
+                      type="button"
+                      className="text-muted-foreground text-xs shrink-0 px-1"
+                      title={isCollapsed ? "Expand" : "Collapse"}
+                      onClick={() => toggleCollapsed(config.id)}
+                    >
+                      {isCollapsed ? "▶" : "▼"}
+                    </button>
                     <Input
                       className="bg-transparent border-none shadow-none outline-none h-auto p-0 text-sm font-semibold w-full"
                       value={config.label}
@@ -182,6 +201,7 @@ export function ConfigPanel({
                   </div>
                 </div>
               </CardHeader>
+              {!isCollapsed && (
               <CardContent className="space-y-3">
                 {/* Backend Selection */}
                 <div className="space-y-1">
@@ -193,7 +213,7 @@ export function ConfigPanel({
                     <SelectTrigger className="h-8 text-xs">
                       <SelectValue />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="w-auto min-w-64">
                       {Object.keys(backends).map((b) => (
                         <SelectItem key={b} value={b}>
                           {b}
@@ -215,7 +235,7 @@ export function ConfigPanel({
                         <SelectTrigger className="h-8 text-xs">
                           <SelectValue />
                         </SelectTrigger>
-                        <SelectContent>
+                        <SelectContent className="w-auto min-w-64">
                           {param.param_type.options.map((opt) => (
                             <SelectItem key={opt.value} value={opt.value}>
                               {opt.label}
@@ -360,6 +380,7 @@ export function ConfigPanel({
                   </div>
                 </div>
               </CardContent>
+              )}
             </Card>
           );
         })}

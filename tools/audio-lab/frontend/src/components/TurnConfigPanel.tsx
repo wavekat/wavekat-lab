@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -27,6 +27,16 @@ export function TurnConfigPanel({
   onConfigsChange,
   onResetDefaults,
 }: TurnConfigPanelProps) {
+  const [collapsedIds, setCollapsedIds] = useState<Set<string>>(new Set());
+  const toggleCollapsed = (id: string) => {
+    setCollapsedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
   const nextId = useMemo(() => {
     let max = 0;
     for (const c of configs) {
@@ -108,11 +118,21 @@ export function TurnConfigPanel({
       </div>
 
       <div className="flex flex-col gap-3">
-        {configs.map((config) => (
+        {configs.map((config) => {
+          const isCollapsed = collapsedIds.has(config.id);
+          return (
           <Card key={config.id} className="relative">
             <CardHeader className="pb-2">
               <div className="flex items-center justify-between gap-2">
-                <CardTitle className="text-sm flex-1 min-w-0">
+                <CardTitle className="text-sm flex-1 min-w-0 flex items-center gap-1">
+                  <button
+                    type="button"
+                    className="text-muted-foreground text-xs shrink-0 px-1"
+                    title={isCollapsed ? "Expand" : "Collapse"}
+                    onClick={() => toggleCollapsed(config.id)}
+                  >
+                    {isCollapsed ? "▶" : "▼"}
+                  </button>
                   <Input
                     className="bg-transparent border-none shadow-none outline-none h-auto p-0 text-sm font-semibold w-full"
                     value={config.label}
@@ -141,6 +161,7 @@ export function TurnConfigPanel({
                 </div>
               </div>
             </CardHeader>
+            {!isCollapsed && (
             <CardContent className="space-y-3">
               {/* Backend selection */}
               <div className="space-y-1">
@@ -152,7 +173,7 @@ export function TurnConfigPanel({
                   <SelectTrigger className="h-8 text-xs">
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="w-auto min-w-64">
                     {Object.keys(backends).map((b) => (
                       <SelectItem key={b} value={b}>
                         {b}
@@ -174,7 +195,7 @@ export function TurnConfigPanel({
                       <SelectTrigger className="h-8 text-xs">
                         <SelectValue />
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent className="w-auto min-w-64">
                         {param.param_type.options.map((opt) => (
                           <SelectItem key={opt.value} value={opt.value}>
                             {opt.label}
@@ -202,8 +223,10 @@ export function TurnConfigPanel({
                 </div>
               ))}
             </CardContent>
+            )}
           </Card>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -27,6 +27,16 @@ export function PipelineConfigPanel({
   turnConfigs,
   onConfigsChange,
 }: PipelineConfigPanelProps) {
+  const [collapsedIds, setCollapsedIds] = useState<Set<string>>(new Set());
+  const toggleCollapsed = (id: string) => {
+    setCollapsedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
   const nextId = useMemo(() => {
     let max = 0;
     for (const c of configs) {
@@ -91,11 +101,21 @@ export function PipelineConfigPanel({
       )}
 
       <div className="flex flex-col gap-3">
-        {configs.map((config) => (
+        {configs.map((config) => {
+          const isCollapsed = collapsedIds.has(config.id);
+          return (
           <Card key={config.id} className="relative">
             <CardHeader className="pb-2">
               <div className="flex items-center justify-between gap-2">
-                <CardTitle className="text-sm flex-1 min-w-0">
+                <CardTitle className="text-sm flex-1 min-w-0 flex items-center gap-1">
+                  <button
+                    type="button"
+                    className="text-muted-foreground text-xs shrink-0 px-1"
+                    title={isCollapsed ? "Expand" : "Collapse"}
+                    onClick={() => toggleCollapsed(config.id)}
+                  >
+                    {isCollapsed ? "▶" : "▼"}
+                  </button>
                   <Input
                     className="bg-transparent border-none shadow-none outline-none h-auto p-0 text-sm font-semibold w-full"
                     value={config.label}
@@ -124,6 +144,7 @@ export function PipelineConfigPanel({
                 </div>
               </div>
             </CardHeader>
+            {!isCollapsed && (
             <CardContent className="space-y-2">
               {/* VAD + Turn Config selectors */}
               <div className="grid grid-cols-2 gap-2">
@@ -273,8 +294,10 @@ export function PipelineConfigPanel({
                 </div>
               </div>
             </CardContent>
+            )}
           </Card>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

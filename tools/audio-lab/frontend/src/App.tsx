@@ -253,9 +253,9 @@ function App() {
   const [turnTiming, setTurnTiming] = useState<
     Record<string, { stageTotals: Record<string, number>; count: number }>
   >({});
-  const [vadOpen, setVadOpen] = useState(true);
-  const [turnOpen, setTurnOpen] = useState(true);
-  const [pipelineOpen, setPipelineOpen] = useState(true);
+  const [vadOpen, setVadOpen] = useState(false);
+  const [turnOpen, setTurnOpen] = useState(false);
+  const [pipelineOpen, setPipelineOpen] = useState(false);
   const [pipelineConfigs, setPipelineConfigs] = useState<PipelineConfig[]>(
     () => loadSavedPipelineConfigs() ?? [],
   );
@@ -274,7 +274,7 @@ function App() {
     return [];
   });
   const [asrTranscripts, setAsrTranscripts] = useState<Record<string, AsrTranscriptState>>({});
-  const [asrOpen, setAsrOpen] = useState(true);
+  const [asrOpen, setAsrOpen] = useState(false);
 
   // Preprocessed data per config
   const [preprocessedSamples, setPreprocessedSamples] = useState<Record<string, number[]>>({});
