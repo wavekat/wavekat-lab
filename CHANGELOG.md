@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.15](https://github.com/wavekat/wavekat-lab/compare/v0.0.14...v0.0.15) (2026-05-14)
+
+
+### Features
+
+* **audio-lab:** add wavekat-zh Smart Turn fine-tune as a second turn backend ([#44](https://github.com/wavekat/wavekat-lab/issues/44)) ([07f92c8](https://github.com/wavekat/wavekat-lab/commit/07f92c84999e393503c1ef60bf45defe7f8c8789))
+
 ## [0.0.14](https://github.com/wavekat/wavekat-lab/compare/v0.0.13...v0.0.14) (2026-05-11)
 
 
