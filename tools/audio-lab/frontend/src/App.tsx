@@ -256,6 +256,12 @@ function App() {
   const [vadOpen, setVadOpen] = useState(false);
   const [turnOpen, setTurnOpen] = useState(false);
   const [pipelineOpen, setPipelineOpen] = useState(false);
+  // Result-panel toggles on the right side. Independent from the sidebar
+  // config toggles above so collapsing a config card doesn't hide the data.
+  const [vadResultsOpen, setVadResultsOpen] = useState(true);
+  const [turnResultsOpen, setTurnResultsOpen] = useState(true);
+  const [pipelineResultsOpen, setPipelineResultsOpen] = useState(true);
+  const [asrResultsOpen, setAsrResultsOpen] = useState(true);
   const [pipelineConfigs, setPipelineConfigs] = useState<PipelineConfig[]>(
     () => loadSavedPipelineConfigs() ?? [],
   );
@@ -1165,13 +1171,13 @@ function App() {
         {configs.length > 0 && (
           <button
             className="flex items-center gap-1 text-sm font-medium pt-2 text-left w-full"
-            onClick={() => setVadOpen((v) => !v)}
+            onClick={() => setVadResultsOpen((v) => !v)}
           >
-            <span className="text-muted-foreground text-xs">{vadOpen ? "▼" : "▶"}</span>
+            <span className="text-muted-foreground text-xs">{vadResultsOpen ? "▼" : "▶"}</span>
             VAD Results
           </button>
         )}
-        {vadOpen && configs.map((config, i) => {
+        {vadResultsOpen && configs.map((config, i) => {
           const timing = vadTiming[config.id];
           const rtf = timing && timing.totalAudioMs > 0
             ? (timing.totalInferenceUs / 1000) / timing.totalAudioMs
@@ -1210,9 +1216,9 @@ function App() {
         {turnConfigs.length > 0 && (
           <button
             className="flex items-center gap-1 text-sm font-medium pt-2 text-left w-full"
-            onClick={() => setTurnOpen((v) => !v)}
+            onClick={() => setTurnResultsOpen((v) => !v)}
           >
-            <span className="text-muted-foreground text-xs">{turnOpen ? "▼" : "▶"}</span>
+            <span className="text-muted-foreground text-xs">{turnResultsOpen ? "▼" : "▶"}</span>
             Turn Detection
             <div className="flex gap-2 items-center ml-auto" onClick={(e) => e.stopPropagation()}>
               {(["finished", "unfinished", "wait"] as const).map((state) => (
@@ -1224,7 +1230,7 @@ function App() {
             </div>
           </button>
         )}
-        {turnOpen && turnConfigs.map((config) => {
+        {turnResultsOpen && turnConfigs.map((config) => {
           const timing = turnTiming[config.id];
           const stageAvgs = timing && timing.count > 0
             ? Object.entries(timing.stageTotals).map(([name, totalUs]) => ({
@@ -1258,9 +1264,9 @@ function App() {
         {pipelineConfigs.length > 0 && (
           <button
             className="flex items-center gap-1 text-sm font-medium pt-2 text-left w-full"
-            onClick={() => setPipelineOpen((v) => !v)}
+            onClick={() => setPipelineResultsOpen((v) => !v)}
           >
-            <span className="text-muted-foreground text-xs">{pipelineOpen ? "\u25BC" : "\u25B6"}</span>
+            <span className="text-muted-foreground text-xs">{pipelineResultsOpen ? "\u25BC" : "\u25B6"}</span>
             Pipeline Mode
             <div className="flex gap-2 items-center ml-auto" onClick={(e) => e.stopPropagation()}>
               {(["finished", "unfinished", "wait"] as const).map((state) => (
@@ -1272,7 +1278,7 @@ function App() {
             </div>
           </button>
         )}
-        {pipelineOpen && pipelineConfigs.map((config) => (
+        {pipelineResultsOpen && pipelineConfigs.map((config) => (
           <PipelineTimeline
             key={config.id}
             label={config.label}
@@ -1294,11 +1300,20 @@ function App() {
         ))}
 
         {asrConfigs.length > 0 && (
+          <button
+            className="flex items-center gap-1 text-sm font-medium pt-2 text-left w-full"
+            onClick={() => setAsrResultsOpen((v) => !v)}
+          >
+            <span className="text-muted-foreground text-xs">{asrResultsOpen ? "▼" : "▶"}</span>
+            ASR Transcripts
+          </button>
+        )}
+        {asrResultsOpen && asrConfigs.length > 0 && (
           <AsrTranscript configs={asrConfigs} states={asrTranscripts} />
         )}
 
         {/* Preprocessed Waveforms/Spectrograms/VAD - only for configs with showPreprocessed enabled */}
-        {vadOpen && configs.filter((c) => showPreprocessed[c.id]).map((config) => {
+        {vadResultsOpen && configs.filter((c) => showPreprocessed[c.id]).map((config) => {
           const configIndex = configs.findIndex((c) => c.id === config.id);
           const color = COLORS[configIndex % COLORS.length];
           const configSamples = preprocessedSamples[config.id] ?? [];
