@@ -79,7 +79,7 @@ jobs:
           R2_BUCKET_NAME: ${{ vars.CV_EXPLORER_R2_BUCKET }}
 
   cleanup:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, wavekat-ci]
     needs: sync
     if: false # Disabled during debugging — re-enable when stable
     steps:

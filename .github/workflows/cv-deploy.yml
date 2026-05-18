@@ -10,7 +10,7 @@ on:
 
 jobs:
   deploy:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, wavekat-ci]
     steps:
       - uses: actions/checkout@v6
 
