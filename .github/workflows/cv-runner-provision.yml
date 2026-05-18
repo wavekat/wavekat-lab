@@ -32,7 +32,7 @@ env:
 
 jobs:
   provision:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, wavekat-ci]
     steps:
       - name: Azure Login
         uses: azure/login@v3
