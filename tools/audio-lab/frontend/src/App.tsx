@@ -20,6 +20,7 @@ import { TurnConfigPanel } from "@/components/TurnConfigPanel";
 import { PipelineConfigPanel } from "@/components/PipelineConfigPanel";
 import { PipelineTimeline } from "@/components/PipelineTimeline";
 import { AsrConfigPanel } from "@/components/AsrConfigPanel";
+import { defaultAsrBackend } from "@/lib/asrBackends";
 import {
   AsrTranscript,
   type AsrTranscriptState,
@@ -590,6 +591,7 @@ function App() {
             finals: [],
             partial: null,
             warning: null,
+            stats: null,
           };
           switch (msg.kind) {
             case "ready":
@@ -623,6 +625,11 @@ function App() {
               return {
                 ...prev,
                 [msg.config_id]: { ...existing, warning: msg.message ?? null },
+              };
+            case "stats":
+              return {
+                ...prev,
+                [msg.config_id]: { ...existing, stats: msg.stats ?? null },
               };
             case "speech_started":
             case "speech_ended":
@@ -1085,9 +1092,8 @@ function App() {
                 }}
                 onConfigsChange={setAsrConfigs}
                 onResetDefaults={() => {
-                  const backendNames = Object.keys(asrBackends);
-                  if (backendNames.length === 0) return;
-                  const backend = backendNames[0];
+                  const backend = defaultAsrBackend(asrBackends);
+                  if (!backend) return;
                   const params: Record<string, unknown> = {};
                   for (const p of asrBackends[backend]) {
                     params[p.name] = p.default;

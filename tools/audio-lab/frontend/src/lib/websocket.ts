@@ -37,7 +37,24 @@ export type AsrEventKind =
   | "speech_ended"
   | "partial"
   | "final"
-  | "warning";
+  | "warning"
+  | "stats";
+
+/** Decode performance reported by backends that track it (R2T2). */
+export interface AsrStats {
+  decode_steps: number;
+  merged_steps: number;
+  last_step_ms: number;
+  mean_step_ms: number;
+  max_step_ms: number;
+  rtf: number;
+  last_lag_ms: number;
+  mean_lag_ms: number;
+  max_lag_ms: number;
+  backlog_ms: number;
+  utterances: number;
+  language: string;
+}
 
 export interface PipelineConfig {
   id: string;
@@ -80,7 +97,7 @@ export type ServerMessage =
   | { type: "turn"; config_id: string; timestamp_ms: number; state: string; confidence: number; latency_ms: number; stage_times: Array<{ name: string; us: number }> }
   | { type: "pipeline"; config_id: string; timestamp_ms: number; event: string; turn_state?: string; turn_confidence?: number; turn_latency_ms?: number; audio_duration_ms?: number }
   | { type: "asr_backends"; backends: Record<string, ParamInfo[]> }
-  | { type: "asr"; config_id: string; kind: AsrEventKind; ts_ms?: number; end_ms?: number; text?: string; confidence?: number; message?: string }
+  | { type: "asr"; config_id: string; kind: AsrEventKind; ts_ms?: number; end_ms?: number; text?: string; confidence?: number; message?: string; stats?: AsrStats | null }
   | { type: "asr_cache_status"; presets: Record<string, boolean> }
   | { type: "asr_preload"; preset: string; status: "started" | "completed" | "error"; message?: string }
   | { type: "done" }

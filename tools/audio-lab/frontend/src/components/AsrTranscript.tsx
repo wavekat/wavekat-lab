@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import type { AsrConfig } from "@/lib/websocket";
+import type { AsrConfig, AsrStats } from "@/lib/websocket";
 
 export interface AsrTranscriptFinal {
   ts_ms: number;
@@ -15,6 +15,8 @@ export interface AsrTranscriptState {
   finals: AsrTranscriptFinal[];
   partial: string | null;
   warning: string | null;
+  /** Decode performance, for backends that report it (R2T2). */
+  stats: AsrStats | null;
 }
 
 interface AsrTranscriptProps {
@@ -27,6 +29,17 @@ function formatMs(ms: number): string {
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = totalSeconds - minutes * 60;
   return `${minutes.toString().padStart(2, "0")}:${seconds.toFixed(1).padStart(4, "0")}`;
+}
+
+/** Short summary of a config's params for the card header. */
+function describeParams(config: AsrConfig): string {
+  if (config.backend === "r2t2") {
+    const weights = String(config.params.weights ?? "q8");
+    const chunk = String(config.params.chunk_ms ?? "160");
+    const lang = String(config.params.language ?? "auto");
+    return `${weights} · ${chunk} ms · ${lang}`;
+  }
+  return typeof config.params.preset === "string" ? config.params.preset : "—";
 }
 
 export function AsrTranscript({ configs, states }: AsrTranscriptProps) {
@@ -55,8 +68,8 @@ function AsrTranscriptCard({ config, state }: AsrTranscriptCardProps) {
   const finals = useMemo(() => state?.finals ?? [], [state?.finals]);
   const partial = state?.partial ?? null;
   const warning = state?.warning ?? null;
-  const preset =
-    typeof config.params.preset === "string" ? config.params.preset : "—";
+  const perf = state?.stats ?? null;
+  const preset = describeParams(config);
 
   const stats = useMemo(() => {
     if (finals.length === 0) return null;
@@ -138,6 +151,18 @@ function AsrTranscriptCard({ config, state }: AsrTranscriptCardProps) {
             </div>
           )}
         </div>
+        {perf && (
+          <div
+            className="text-xs text-muted-foreground font-mono"
+            title="step: wall time of one decode step · lag: audio arrival → its step done · RTF: decode time / audio decoded (< 1 keeps up)"
+          >
+            step {perf.last_step_ms.toFixed(0)} ms (avg {perf.mean_step_ms.toFixed(0)}, max{" "}
+            {perf.max_step_ms.toFixed(0)}) · lag {perf.last_lag_ms.toFixed(0)} ms (avg{" "}
+            {perf.mean_lag_ms.toFixed(0)}) · RTF {perf.rtf.toFixed(2)}
+            {perf.merged_steps > 0 && <> · {perf.merged_steps} catch-up steps</>}
+            {perf.language && <> · {perf.language}</>}
+          </div>
+        )}
         <div className="flex items-center justify-between text-xs text-muted-foreground">
           {stats ? (
             <span>

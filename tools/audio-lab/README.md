@@ -68,9 +68,14 @@ Streaming speech-to-text via [`wavekat-asr`](https://github.com/wavekat/wavekat-
 | Backend | Description | Preset (`preset` param) |
 |---------|-------------|-------------------------|
 | **sherpa-onnx** | Local streaming Zipformer / Paraformer via [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) | `bilingual` (default, ZH+EN) · `en` · `zh` · `paraformer-zh-en` |
+| **r2t2** | NetEase Youdao's [Confucius4-R2T2](https://github.com/netease-youdao/Confucius4-R2T2) — append-only streaming LLM-ASR (Qwen3-ASR-1.7B fine-tune) via llama.cpp; Metal on macOS | `weights`: `q8` (default, ~2.5 GB) · `q4` (~1.7 GB) · `f16` (~4.1 GB); `chunk_ms`: 80–1000 (160 = reference); `language`: auto / Chinese / English |
+
+R2T2 cards add a performance line under the transcript: per-step decode time, lag (audio arrival → the step that decoded it finishing), real-time factor (< 1 keeps up), how many steps merged queued chunks to catch up, and the detected language. For a side-by-side, add one `sherpa-onnx` and one `r2t2` config and record. Live recording lets R2T2 merge chunks when the machine falls behind real time; file analysis runs upstream's fixed chunk schedule, so its lag numbers reflect the file arriving all at once rather than a live stream.
 
 > [!NOTE]
-> The first time you record or load a file with an ASR config enabled, sherpa-onnx downloads the chosen model from HuggingFace (~75 MB for `bilingual`) into `$HF_HOME` (default `~/.cache/huggingface/hub/`). The transcript card shows `loading model…` until the model is ready; subsequent runs are instant.
+> The first time you record or load a file with an ASR config enabled, the backend downloads the chosen model from HuggingFace (~75 MB for sherpa-onnx `bilingual`, ~2.5 GB for R2T2 `q8`) into `$HF_HOME` (default `~/.cache/huggingface/hub/`). Use **Preload model** in the config card to fetch it ahead of time. The transcript card shows `loading model…` until the model is ready; R2T2 weights stay loaded for the life of the server, so later recordings start instantly.
+>
+> The R2T2 weights are under the [NetEase Youdao Model Use License](https://github.com/netease-youdao/Confucius4-R2T2/blob/master/MODEL_LICENSE), not Apache-2.0. Building the backend compiles llama.cpp, which needs `cmake` and `libclang` (bundled with Xcode on macOS).
 
 ## Architecture
 
