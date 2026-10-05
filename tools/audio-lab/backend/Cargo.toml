@@ -13,7 +13,8 @@ wavekat-vad = { version = "0.1", features = [
     "serde",
 ] }
 wavekat-turn = { version = "0.0.8", features = ["pipecat", "wavekat-smart-turn"] }
-wavekat-asr = { version = "0.0.4", features = ["sherpa-onnx"] }
+# R2T2 backend is on a wavekat-asr feature branch until it's released.
+wavekat-asr = { git = "https://github.com/wavekat/wavekat-asr", branch = "feat/r2t2-backend", features = ["sherpa-onnx", "r2t2"] }
 axum = { version = "0.8", features = ["ws", "multipart"] }
 tokio = { workspace = true }
 tower-http = { version = "0.6", features = ["cors", "fs"] }

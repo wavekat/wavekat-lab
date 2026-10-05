@@ -10,9 +10,24 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { defaultAsrBackend } from "@/lib/asrBackends";
 import type { AsrConfig, ParamInfo } from "@/lib/websocket";
 
 export type { AsrConfig };
+
+/** Cache/preload key and approximate download size for a config's model.
+ *  Matches the keys of the server's `asr_cache_status` map. */
+function modelCacheInfo(config: AsrConfig): { key: string; size: string } | null {
+  if (config.backend === "sherpa-onnx") {
+    return { key: String(config.params.preset ?? "bilingual"), size: "~100 MB" };
+  }
+  if (config.backend === "r2t2") {
+    const weights = String(config.params.weights ?? "q8");
+    const size = { q8: "~2.5 GB", q4: "~1.7 GB", f16: "~4.1 GB" }[weights] ?? "a few GB";
+    return { key: `r2t2-${weights}`, size };
+  }
+  return null;
+}
 
 interface AsrConfigPanelProps {
   configs: AsrConfig[];
@@ -61,10 +76,9 @@ export function AsrConfigPanel({
   }, [configs]);
 
   const addConfig = () => {
-    const backendNames = Object.keys(backends);
-    if (backendNames.length === 0) return;
+    const backend = defaultAsrBackend(backends);
+    if (!backend) return;
 
-    const backend = backendNames[0];
     const params: Record<string, unknown> = {};
     for (const p of backends[backend]) {
       params[p.name] = p.default;
@@ -184,7 +198,7 @@ export function AsrConfigPanel({
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent className="w-auto min-w-64">
-                    {Object.keys(backends).map((b) => (
+                    {Object.keys(backends).sort().map((b) => (
                       <SelectItem key={b} value={b}>
                         {b}
                       </SelectItem>
@@ -232,8 +246,10 @@ export function AsrConfigPanel({
                 </div>
               ))}
 
-              {config.backend === "sherpa-onnx" && (() => {
-                const preset = String(config.params.preset ?? "bilingual");
+              {(() => {
+                const info = modelCacheInfo(config);
+                if (!info) return null;
+                const preset = info.key;
                 const cached = cacheStatus[preset] ?? false;
                 const inFlight = preloadStatus[preset];
                 const errMsg = preloadErrors[preset];
@@ -280,7 +296,7 @@ export function AsrConfigPanel({
                     )}
                     {!cached && inFlight !== "downloading" && (
                       <p className="text-xs text-muted-foreground">
-                        First record/upload will download the model (~100&nbsp;MB) and may take a minute.
+                        First record/upload will download the model ({info.size}) and may take a while.
                       </p>
                     )}
                   </div>

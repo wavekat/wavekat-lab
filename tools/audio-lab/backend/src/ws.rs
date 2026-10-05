@@ -153,7 +153,7 @@ pub enum ServerMessage {
     },
     /// ASR transcript event from a specific config. `kind` is one of
     /// `ready` | `speech_started` | `speech_ended` | `partial` | `final` |
-    /// `warning`. Optional fields are populated based on `kind`.
+    /// `warning` | `stats`. Optional fields are populated based on `kind`.
     Asr {
         config_id: String,
         kind: String,
@@ -162,6 +162,7 @@ pub enum ServerMessage {
         text: Option<String>,
         confidence: Option<f32>,
         message: Option<String>,
+        stats: Option<asr::AsrStats>,
     },
     Done,
     Error {
@@ -180,6 +181,7 @@ fn asr_event_to_server_msg(evt: AsrServerEvent) -> ServerMessage {
             text: None,
             confidence: None,
             message: None,
+            stats: None,
         },
         AsrServerEvent::SpeechStarted { config_id, ts_ms } => ServerMessage::Asr {
             config_id,
@@ -189,6 +191,7 @@ fn asr_event_to_server_msg(evt: AsrServerEvent) -> ServerMessage {
             text: None,
             confidence: None,
             message: None,
+            stats: None,
         },
         AsrServerEvent::SpeechEnded { config_id, ts_ms } => ServerMessage::Asr {
             config_id,
@@ -198,6 +201,7 @@ fn asr_event_to_server_msg(evt: AsrServerEvent) -> ServerMessage {
             text: None,
             confidence: None,
             message: None,
+            stats: None,
         },
         AsrServerEvent::Partial {
             config_id,
@@ -211,6 +215,7 @@ fn asr_event_to_server_msg(evt: AsrServerEvent) -> ServerMessage {
             text: Some(text),
             confidence: None,
             message: None,
+            stats: None,
         },
         AsrServerEvent::Final {
             config_id,
@@ -226,6 +231,7 @@ fn asr_event_to_server_msg(evt: AsrServerEvent) -> ServerMessage {
             text: Some(text),
             confidence: Some(confidence),
             message: None,
+            stats: None,
         },
         AsrServerEvent::Warning { config_id, message } => ServerMessage::Asr {
             config_id,
@@ -235,6 +241,17 @@ fn asr_event_to_server_msg(evt: AsrServerEvent) -> ServerMessage {
             text: None,
             confidence: None,
             message: Some(message),
+            stats: None,
+        },
+        AsrServerEvent::Stats { config_id, stats } => ServerMessage::Asr {
+            config_id,
+            kind: "stats".into(),
+            ts_ms: None,
+            end_ms: None,
+            text: None,
+            confidence: None,
+            message: None,
+            stats: Some(stats),
         },
     }
 }
@@ -479,7 +496,12 @@ pub async fn handle_ws(socket: WebSocket) {
 
                         // Start ASR pipeline
                         let mut asr_rx = if !asr_configs.is_empty() {
-                            Some(asr::run_asr_pipeline(&asr_configs, &audio_tx, sample_rate))
+                            Some(asr::run_asr_pipeline(
+                                &asr_configs,
+                                &audio_tx,
+                                sample_rate,
+                                true,
+                            ))
                         } else {
                             None
                         };
@@ -765,7 +787,12 @@ pub async fn handle_ws(socket: WebSocket) {
 
                 // Start ASR pipeline BEFORE emitting frames
                 let asr_rx = if !asr_configs.is_empty() {
-                    Some(asr::run_asr_pipeline(&asr_configs, &audio_tx, sample_rate))
+                    Some(asr::run_asr_pipeline(
+                        &asr_configs,
+                        &audio_tx,
+                        sample_rate,
+                        false,
+                    ))
                 } else {
                     None
                 };
